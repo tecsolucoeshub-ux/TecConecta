@@ -1,0 +1,150 @@
+{
+  "entities": {
+    "Provider": {
+      "title": "Provider",
+      "description": "Prestador de serviços, profissional autônomo ou comércio local cadastrado no TecConecta",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identificador único do prestador",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "description": "Nome do negócio ou profissional",
+          "maxLength": 100,
+          "minLength": 2
+        },
+        "category": {
+          "type": "string",
+          "description": "Categoria de serviço ou comércio",
+          "maxLength": 60,
+          "minLength": 2
+        },
+        "city": {
+          "type": "string",
+          "description": "Cidade de atendimento",
+          "maxLength": 80,
+          "minLength": 2
+        },
+        "address": {
+          "type": "string",
+          "description": "Endereço ou ponto de referência",
+          "maxLength": 200
+        },
+        "neighborhood": {
+          "type": "string",
+          "description": "Bairro ou região local",
+          "maxLength": 80
+        },
+        "cep": {
+          "type": "string",
+          "description": "Código de Endereçamento Postal (CEP)",
+          "maxLength": 12
+        },
+        "lat": {
+          "type": "number",
+          "description": "Latitude geográfica"
+        },
+        "lng": {
+          "type": "number",
+          "description": "Longitude geográfica"
+        },
+        "whatsapp": {
+          "type": "string",
+          "description": "Número do WhatsApp com DDD apenas dígitos",
+          "maxLength": 15,
+          "minLength": 10,
+          "pattern": "^[0-9]{10,15}$"
+        },
+        "description": {
+          "type": "string",
+          "description": "Breve descrição dos serviços prestados",
+          "maxLength": 300
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Data e hora do cadastro"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "category",
+        "city",
+        "address",
+        "lat",
+        "lng",
+        "whatsapp",
+        "createdAt"
+      ]
+    },
+    "SponsoredBanner": {
+      "title": "SponsoredBanner",
+      "description": "Banner publicitário patrocinado de empresas parceiras gerenciadas pelo ADM",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "companyName": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "headline": {
+          "type": "string",
+          "maxLength": 150
+        },
+        "subtext": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "ctaText": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "whatsapp": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "badgeText": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "category": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "companyName",
+        "headline",
+        "subtext",
+        "whatsapp",
+        "active",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/providers/{providerId}": {
+      "schema": "Provider",
+      "description": "Coleção pública de prestadores e comércios locais conectados via TecConecta"
+    },
+    "/banners/{bannerId}": {
+      "schema": "SponsoredBanner",
+      "description": "Coleção pública de banners patrocinados gerenciados pela administração da TecSoluções"
+    }
+  }
+}

@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidProvider(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 100
+        && data.category is string && data.category.size() >= 2 && data.category.size() <= 60
+        && data.city is string && data.city.size() >= 2 && data.city.size() <= 80
+        && data.address is string && data.address.size() <= 200
+        && (data.lat is int || data.lat is float)
+        && (data.lng is int || data.lng is float)
+        && data.whatsapp is string && data.whatsapp.size() >= 10 && data.whatsapp.size() <= 15
+        && data.createdAt is string;
+    }
+
+    // Providers collection - Public read for connecting local clients, validated create/update
+    match /providers/{providerId} {
+      allow get, list: if true;
+      allow create: if isValidId(providerId) && isValidProvider(incoming());
+      allow update: if isValidId(providerId) && isValidProvider(incoming());
+      allow delete: if isValidId(providerId);
+    }
+
+    // Sponsored Banners collection - Public read for monetization, managed by platform
+    match /banners/{bannerId} {
+      allow get, list: if true;
+      allow create, update, delete: if isValidId(bannerId);
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "TecConecta",
+  "description": "Plataforma geolocalizada de conexão direta entre prestadores de serviços, profissionais autônomos, comércios locais e clientes via WhatsApp, desenvolvida pela DaMaceno Soluções.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
