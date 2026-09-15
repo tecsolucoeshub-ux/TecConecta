@@ -115,7 +115,19 @@ export default function App() {
 
     // Listen for cross-component updates
     const handleProviderAdded = (event: CustomEvent<Provider>) => {
-      setProviders((prev) => [event.detail, ...prev.filter((p) => p.id !== event.detail.id)]);
+      const newP = event.detail;
+      const cleanPhone = (newP.whatsapp || '').replace(/\D/g, '');
+      const cleanName = (newP.name || '').trim().toLowerCase();
+      const cleanCity = (newP.city || '').trim().toLowerCase();
+      setProviders((prev) => {
+        const filtered = prev.filter((p) => {
+          if (p.id === newP.id) return false;
+          if (cleanPhone && p.whatsapp.replace(/\D/g, '') === cleanPhone) return false;
+          if (cleanName && cleanCity && p.name.trim().toLowerCase() === cleanName && p.city.trim().toLowerCase() === cleanCity) return false;
+          return true;
+        });
+        return [newP, ...filtered];
+      });
     };
     const handleProviderUpdated = (event: CustomEvent<Provider>) => {
       setProviders((prev) => prev.map((p) => (p.id === event.detail.id ? event.detail : p)));
@@ -348,7 +360,29 @@ export default function App() {
       });
     }
 
-    return result;
+    // Deduplicate to guarantee twin cards never render
+    const seenIds = new Set<string>();
+    const seenPhones = new Set<string>();
+    const seenNameCities = new Set<string>();
+    const uniqueResult: Provider[] = [];
+
+    for (const p of result) {
+      if (seenIds.has(p.id)) continue;
+      const phone = (p.whatsapp || '').replace(/\D/g, '');
+      const cleanName = (p.name || '').trim().toLowerCase();
+      const cleanCity = (p.city || '').trim().toLowerCase();
+      const nameCity = cleanName && cleanCity ? `${cleanName}::${cleanCity}` : '';
+
+      if (phone && phone.length >= 8 && seenPhones.has(phone)) continue;
+      if (nameCity && seenNameCities.has(nameCity)) continue;
+
+      seenIds.add(p.id);
+      if (phone && phone.length >= 8) seenPhones.add(phone);
+      if (nameCity) seenNameCities.add(nameCity);
+      uniqueResult.push(p);
+    }
+
+    return uniqueResult;
   }, [providers, selectedCategory, selectedCity, searchQuery, referenceCoords]);
 
   // Center coordinates for map view
@@ -363,7 +397,20 @@ export default function App() {
   }, [selectedProvider, userCoords, activeLocality, filteredProviders]);
 
   const handleProviderCreated = (newP: Provider) => {
-    setProviders((prev) => [newP, ...prev]);
+    const cleanPhone = (newP.whatsapp || '').replace(/\D/g, '');
+    const cleanName = (newP.name || '').trim().toLowerCase();
+    const cleanCity = (newP.city || '').trim().toLowerCase();
+
+    setProviders((prev) => {
+      const filtered = prev.filter((p) => {
+        if (p.id === newP.id) return false;
+        if (cleanPhone && p.whatsapp.replace(/\D/g, '') === cleanPhone) return false;
+        if (cleanName && cleanCity && p.name.trim().toLowerCase() === cleanName && p.city.trim().toLowerCase() === cleanCity) return false;
+        return true;
+      });
+      return [newP, ...filtered];
+    });
+
     setSelectedProvider(newP);
     // Focus locality immediately on the newly registered business
     handleSelectLocality({

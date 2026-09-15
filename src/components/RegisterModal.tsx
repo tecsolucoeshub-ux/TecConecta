@@ -130,6 +130,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setErrorMessage(null);
 
     const cleanWhatsapp = whatsapp.replace(/\D/g, '');

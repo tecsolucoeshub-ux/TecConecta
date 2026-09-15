@@ -8,6 +8,7 @@ export interface CategoryMeta {
 
 export const CATEGORIES: CategoryMeta[] = [
   { id: 'all', name: 'Todas as Categorias', color: '#00E5FF', accent: '#0B132B', tag: 'Todos' },
+  { id: 'solucoes-ia', name: 'Soluções com IA', color: '#00E5FF', accent: '#FF6B00', tag: 'IA & Tech' },
   { id: 'diarista', name: 'Diarista & Limpeza', color: '#00E5FF', accent: '#00B4D8', tag: 'Diarista' },
   { id: 'eletricista', name: 'Eletricista', color: '#FFB703', accent: '#FF6B00', tag: 'Eletricista' },
   { id: 'pintor', name: 'Pintor & Acabamentos', color: '#FF6B00', accent: '#E63946', tag: 'Pintor' },
@@ -23,6 +24,7 @@ export const CATEGORIES: CategoryMeta[] = [
 ];
 
 export const POPULAR_CITIES = [
+  { name: 'Rio Verde - GO', lat: -17.7915, lng: -50.9201 },
   { name: 'São Paulo - SP', lat: -23.55052, lng: -46.633308 },
   { name: 'Rio de Janeiro - RJ', lat: -22.906847, lng: -43.172896 },
   { name: 'Belo Horizonte - MG', lat: -19.916681, lng: -43.934493 },

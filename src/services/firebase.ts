@@ -53,13 +53,22 @@ const LOCAL_STORAGE_KEY = 'tecconecta_providers_v1';
 function deduplicateProviders(list: Provider[]): Provider[] {
   const seenIds = new Set<string>();
   const seenPhones = new Set<string>();
+  const seenNamesCities = new Set<string>();
+
   return list.filter((p) => {
     if (!p || !p.id) return false;
     const cleanPhone = (p.whatsapp || '').replace(/\D/g, '');
+    const cleanName = (p.name || '').trim().toLowerCase();
+    const cleanCity = (p.city || '').trim().toLowerCase();
+    const nameCity = cleanName && cleanCity ? `${cleanName}::${cleanCity}` : '';
+
     if (seenIds.has(p.id)) return false;
     if (cleanPhone && cleanPhone.length >= 8 && seenPhones.has(cleanPhone)) return false;
+    if (nameCity && seenNamesCities.has(nameCity)) return false;
+
     seenIds.add(p.id);
     if (cleanPhone && cleanPhone.length >= 8) seenPhones.add(cleanPhone);
+    if (nameCity) seenNamesCities.add(nameCity);
     return true;
   });
 }
@@ -135,13 +144,23 @@ export async function fetchProviders(): Promise<Provider[]> {
 
 export async function saveProvider(provider: Provider): Promise<Provider> {
   const path = `providers/${provider.id}`;
-  // 1. Always update local storage first with deduplication to prevent double banners
+  // 1. Always update local storage first with deduplication to prevent double banners or cards
   const current = getStoredProviders();
   const cleanPhone = (provider.whatsapp || '').replace(/\D/g, '');
-  const filtered = current.filter(
-    (p) => p.id !== provider.id && (!cleanPhone || p.whatsapp.replace(/\D/g, '') !== cleanPhone)
-  );
-  const updated = [provider, ...filtered];
+  const cleanName = (provider.name || '').trim().toLowerCase();
+  const cleanCity = (provider.city || '').trim().toLowerCase();
+
+  const filtered = current.filter((p) => {
+    if (p.id === provider.id) return false;
+    const pPhone = (p.whatsapp || '').replace(/\D/g, '');
+    if (cleanPhone && pPhone && cleanPhone === pPhone) return false;
+    if (cleanName && cleanCity && p.name.trim().toLowerCase() === cleanName && p.city.trim().toLowerCase() === cleanCity) {
+      return false;
+    }
+    return true;
+  });
+
+  const updated = deduplicateProviders([provider, ...filtered]);
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
 
   // 2. Persist to Firestore if available
@@ -150,7 +169,7 @@ export async function saveProvider(provider: Provider): Promise<Provider> {
       const { doc, setDoc } = await import('firebase/firestore');
       await setDoc(doc(firestoreDb, 'providers', provider.id), provider);
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, path);
+      console.warn('Firestore write fallback to local store:', error);
     }
   }
 
