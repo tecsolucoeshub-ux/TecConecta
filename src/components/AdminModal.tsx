@@ -26,6 +26,7 @@ import { SponsoredBanner, AdminSettings, Provider } from '../types';
 import { CATEGORIES } from '../data/categories';
 import { saveSponsoredBanner, deleteSponsoredBanner, saveAdminSettings } from '../services/firebase';
 import { ImageUploadField } from './ImageUploadField';
+import { normalizeWhatsAppNumber } from '../utils/whatsapp';
 
 interface AdminModalProps {
   isOpen: boolean;
@@ -206,7 +207,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
         companyName: companyName.trim(),
         headline: headline.trim(),
         subtext: subtext.trim() || 'Entre em contato pelo WhatsApp.',
-        whatsapp: bannerWhatsapp.replace(/\D/g, ''),
+        whatsapp: normalizeWhatsAppNumber(bannerWhatsapp),
         badgeText: badgeText.trim() || 'Patrocinador',
         category: category.trim() || 'Comércio Local',
         imageUrl: bannerImageUrl.trim() || undefined,
@@ -279,7 +280,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     e.preventDefault();
     const updated: AdminSettings = {
       ...adminSettings,
-      admWhatsapp: admWhatsapp.replace(/\D/g, ''),
+      admWhatsapp: normalizeWhatsAppNumber(admWhatsapp),
       admName: admName.trim(),
       bannerHeadline: bannerHeadline.trim(),
       bannerSubtext: bannerSubtext.trim(),

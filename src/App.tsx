@@ -20,6 +20,7 @@ import { OfflineIndicator } from './components/OfflineIndicator';
 import { Footer } from './components/Footer';
 import { fetchAddressByCep } from './utils/cepGeocoding';
 import { useTheme } from './context/ThemeContext';
+import { buildWhatsAppUrl } from './utils/whatsapp';
 
 // Haversine distance calculator for proximity sorting
 function calcDist(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -788,9 +789,10 @@ export default function App() {
                       </p>
                       <div className={`mt-2 flex items-center justify-between pt-2 border-t ${isLight ? 'border-slate-100' : 'border-white/5'}`}>
                         <a
-                          href={`https://wa.me/55${p.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(
+                          href={buildWhatsAppUrl(
+                            p.whatsapp,
                             `Olá ${p.name}, vi seu anúncio no TecConecta (DaMaceno Soluções)!`
-                          )}`}
+                          )}
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}

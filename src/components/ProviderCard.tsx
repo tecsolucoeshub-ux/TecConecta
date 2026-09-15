@@ -3,6 +3,7 @@ import { MessageCircle, MapPin, Star, ShieldCheck, ImageIcon } from 'lucide-reac
 import { Provider } from '../types';
 import { useTheme } from '../context/ThemeContext';
 import { getProviderPhoto } from '../utils/imageCompressor';
+import { buildWhatsAppUrl } from '../utils/whatsapp';
 
 interface ProviderCardProps {
   provider: Provider;
@@ -38,14 +39,13 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
 }) => {
   const { isLight } = useTheme();
 
-  const cleanPhone = provider.whatsapp.replace(/\D/g, '');
-  const cleanAdmPhone = (admWhatsapp || '11999999999').replace(/\D/g, '');
-  const admContactUrl = `https://wa.me/55${cleanAdmPhone}?text=${encodeURIComponent(
+  const admContactUrl = buildWhatsAppUrl(
+    admWhatsapp || '11999999999',
     `Olá ADM DaMaceno Soluções! Sou responsável pelo perfil cadastrado de "${provider.name}" (WhatsApp: ${provider.whatsapp}) e gostaria de solicitar uma atualização de dados cadastrais ou de foto.`
-  )}`;
+  );
 
   const defaultMessage = `Olá ${provider.name}, vi seu anúncio no TecConecta da DaMaceno Soluções e gostaria de solicitar um orçamento de ${provider.category}!`;
-  const whatsappUrl = `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(defaultMessage)}`;
+  const whatsappUrl = buildWhatsAppUrl(provider.whatsapp, defaultMessage);
 
   const distanceKm = userCoords
     ? calculateDistance(userCoords.lat, userCoords.lng, provider.lat, provider.lng)

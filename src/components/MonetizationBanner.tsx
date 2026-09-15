@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Megaphone, MessageCircle, Sparkles, ArrowUpRight, ImageIcon } from 'lucide-react';
 import { SponsoredBanner, AdminSettings } from '../types';
 import { useTheme } from '../context/ThemeContext';
+import { buildWhatsAppUrl } from '../utils/whatsapp';
 
 interface MonetizationBannerProps {
   banners: SponsoredBanner[];
@@ -40,11 +41,10 @@ export const MonetizationBanner: React.FC<MonetizationBannerProps> = ({
 
   const currentBanner = activeBanners[currentIndex] || null;
 
-  // Clean WhatsApp for ADM
-  const cleanAdmWhatsapp = adminSettings.admWhatsapp.replace(/\D/g, '');
-  const admContactUrl = `https://wa.me/55${cleanAdmWhatsapp}?text=${encodeURIComponent(
+  const admContactUrl = buildWhatsAppUrl(
+    adminSettings.admWhatsapp,
     'Olá! Tenho interesse em anunciar minha empresa no banner de destaque do TecConecta (DaMaceno Soluções). Gostaria de mais informações sobre os planos.'
-  )}`;
+  );
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
@@ -145,9 +145,10 @@ export const MonetizationBanner: React.FC<MonetizationBannerProps> = ({
             {/* If there is a current sponsor, provide button to talk to them */}
             {currentBanner && (
               <a
-                href={`https://wa.me/55${currentBanner.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(
+                href={buildWhatsAppUrl(
+                  currentBanner.whatsapp,
                   `Olá ${currentBanner.companyName}, vi seu destaque no banner do TecConecta (DaMaceno Soluções)!`
-                )}`}
+                )}
                 target="_blank"
                 rel="noopener noreferrer"
                 className={`px-3.5 py-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition text-center ${

@@ -1,6 +1,7 @@
 import { Provider, SponsoredBanner, AdminSettings } from '../types';
 import { SEED_PROVIDERS } from '../data/seedProviders';
 import firebaseConfig from '../firebase-applet-config.json';
+import { normalizeWhatsAppNumber } from '../utils/whatsapp';
 
 export enum OperationType {
   CREATE = 'create',
@@ -49,7 +50,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
 const LOCAL_STORAGE_KEY = 'tecconecta_providers_v1';
 
-// Helper to remove any duplicate provider instances (guaranteeing 1 banner/card per advertiser)
+// Helper to remove any duplicate provider instances and normalize phone numbers
 function deduplicateProviders(list: Provider[]): Provider[] {
   const seenIds = new Set<string>();
   const seenPhones = new Set<string>();
@@ -57,6 +58,9 @@ function deduplicateProviders(list: Provider[]): Provider[] {
 
   return list.filter((p) => {
     if (!p || !p.id) return false;
+    if (p.whatsapp) {
+      p.whatsapp = normalizeWhatsAppNumber(p.whatsapp);
+    }
     const cleanPhone = (p.whatsapp || '').replace(/\D/g, '');
     const cleanName = (p.name || '').trim().toLowerCase();
     const cleanCity = (p.city || '').trim().toLowerCase();
@@ -131,8 +135,9 @@ export async function fetchProviders(): Promise<Provider[]> {
         remoteList.push({ id: doc.id, ...doc.data() } as Provider);
       });
       if (remoteList.length > 0) {
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(remoteList));
-        return remoteList;
+        const unique = deduplicateProviders(remoteList);
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(unique));
+        return unique;
       }
     } catch (error) {
       console.warn('Firestore fetch fallback to local store:', error);
@@ -143,6 +148,10 @@ export async function fetchProviders(): Promise<Provider[]> {
 }
 
 export async function saveProvider(provider: Provider): Promise<Provider> {
+  // Always normalize phone number to DDD + digits format
+  if (provider.whatsapp) {
+    provider.whatsapp = normalizeWhatsAppNumber(provider.whatsapp);
+  }
   const path = `providers/${provider.id}`;
   // 1. Always update local storage first with deduplication to prevent double banners or cards
   const current = getStoredProviders();
@@ -180,6 +189,9 @@ export async function saveProvider(provider: Provider): Promise<Provider> {
 }
 
 export async function updateProvider(id: string, updates: Partial<Provider>): Promise<Provider> {
+  if (updates.whatsapp) {
+    updates.whatsapp = normalizeWhatsAppNumber(updates.whatsapp);
+  }
   const path = `providers/${id}`;
   const current = getStoredProviders();
   const existing = current.find(p => p.id === id);

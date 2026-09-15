@@ -5,6 +5,7 @@ import { CATEGORIES } from '../data/categories';
 import { updateProvider, deleteProvider } from '../services/firebase';
 import { fetchAddressByCep } from '../utils/cepGeocoding';
 import { ImageUploadField } from './ImageUploadField';
+import { normalizeWhatsAppNumber } from '../utils/whatsapp';
 
 interface EditProfileModalProps {
   isOpen: boolean;
@@ -165,9 +166,9 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
       return;
     }
 
-    const cleanWhatsapp = whatsapp.replace(/\D/g, '');
+    const cleanWhatsapp = normalizeWhatsAppNumber(whatsapp);
     if (cleanWhatsapp.length < 10) {
-      setErrorMessage('WhatsApp inválido. Digite o DDD + número.');
+      setErrorMessage('WhatsApp inválido. Digite o DDD + número (ex: (64) 99999-9999).');
       return;
     }
 
@@ -413,8 +414,13 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                 <input
                   type="tel"
                   value={whatsapp}
-                  onChange={(e) => setWhatsapp(e.target.value.replace(/\D/g, ''))}
-                  placeholder="Ex: 11987654321"
+                  onChange={(e) => {
+                    let raw = e.target.value.replace(/\D/g, '');
+                    if (raw.startsWith('0')) raw = raw.replace(/^0+/, '');
+                    if (raw.startsWith('55') && raw.length > 11) raw = raw.slice(2);
+                    setWhatsapp(raw.slice(0, 11));
+                  }}
+                  placeholder="Ex: 64999998888"
                   required
                   className="w-full rounded-xl bg-white/5 border border-white/15 px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-[#00E5FF] transition"
                 />

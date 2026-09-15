@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow, useMap } from '@vis.gl/react-google-maps';
 import { MessageCircle, MapPin, Star, Navigation, ExternalLink, Key, Layers, Compass, Plus, Minus, LocateFixed } from 'lucide-react';
 import { Provider } from '../types';
+import { buildWhatsAppUrl } from '../utils/whatsapp';
 
 interface InteractiveMapProps {
   providers: Provider[];
@@ -197,9 +198,10 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
                   )}
                   <div className="mt-2.5 pt-2 border-t border-gray-200">
                     <a
-                      href={`https://wa.me/55${selectedProvider.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(
+                      href={buildWhatsAppUrl(
+                        selectedProvider.whatsapp,
                         `Olá ${selectedProvider.name}, vi seu anúncio no TecConecta (DaMaceno Soluções) e gostaria de informações sobre ${selectedProvider.category}!`
-                      )}`}
+                      )}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-[#25D366] text-white text-xs font-bold hover:bg-[#1EBE5D] transition shadow-sm"
@@ -443,9 +445,10 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
               {/* Action Buttons */}
               <div className="mt-3 pt-2.5 border-t border-white/10 flex items-center gap-2">
                 <a
-                  href={`https://wa.me/55${selectedProvider.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(
+                  href={buildWhatsAppUrl(
+                    selectedProvider.whatsapp,
                     `Olá ${selectedProvider.name}, vi seu anúncio no TecConecta (DaMaceno Soluções) e gostaria de solicitar um orçamento para ${selectedProvider.category}!`
-                  )}`}
+                  )}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#25D366] to-[#128C7E] px-4 py-2.5 text-xs font-bold text-white shadow-lg hover:brightness-110 active:scale-[0.98] transition"

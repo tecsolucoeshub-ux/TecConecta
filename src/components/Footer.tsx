@@ -1,6 +1,7 @@
 import React from 'react';
 import { ShieldCheck, MessageCircle, Heart, Sparkles, MapPin } from 'lucide-react';
 import { TecLogo } from './TecLogo';
+import { buildWhatsAppUrl } from '../utils/whatsapp';
 
 interface FooterProps {
   onOpenPrivacyPolicy: () => void;
@@ -15,10 +16,10 @@ export const Footer: React.FC<FooterProps> = ({
   onOpenAdmin,
   admWhatsapp,
 }) => {
-  const cleanAdmPhone = (admWhatsapp || '11999999999').replace(/\D/g, '');
-  const admContactUrl = `https://wa.me/55${cleanAdmPhone}?text=${encodeURIComponent(
+  const admContactUrl = buildWhatsAppUrl(
+    admWhatsapp || '11999999999',
     'Olá ADM DaMaceno Soluções! Sou um anunciante cadastrado no TecConecta e gostaria de solicitar uma alteração ou exclusão de dados do meu perfil.'
-  )}`;
+  );
   return (
     <footer className="mt-16 border-t border-white/10 bg-[#080E21] text-[#F4F7F6]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">

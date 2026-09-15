@@ -5,6 +5,7 @@ import { CATEGORIES } from '../data/categories';
 import { saveProvider } from '../services/firebase';
 import { fetchAddressByCep } from '../utils/cepGeocoding';
 import { ImageUploadField } from './ImageUploadField';
+import { normalizeWhatsAppNumber } from '../utils/whatsapp';
 
 interface RegisterModalProps {
   isOpen: boolean;
@@ -44,9 +45,16 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Format WhatsApp input: (XX) 9XXXX-XXXX
+  // Format WhatsApp input: (XX) 9XXXX-XXXX, removing any pasted 55 or leading 0
   const handleWhatsappChange = (val: string) => {
-    const digits = val.replace(/\D/g, '').slice(0, 11);
+    let rawDigits = val.replace(/\D/g, '');
+    if (rawDigits.startsWith('0')) {
+      rawDigits = rawDigits.replace(/^0+/, '');
+    }
+    if (rawDigits.startsWith('55') && rawDigits.length > 11) {
+      rawDigits = rawDigits.slice(2);
+    }
+    const digits = rawDigits.slice(0, 11);
     let formatted = digits;
     if (digits.length > 2) {
       formatted = `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
@@ -133,9 +141,9 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     if (isSubmitting) return;
     setErrorMessage(null);
 
-    const cleanWhatsapp = whatsapp.replace(/\D/g, '');
+    const cleanWhatsapp = normalizeWhatsAppNumber(whatsapp);
     if (cleanWhatsapp.length < 10) {
-      setErrorMessage('Por favor, informe um WhatsApp válido com DDD (mínimo 10 dígitos).');
+      setErrorMessage('Por favor, informe um WhatsApp válido com DDD (ex: (64) 99999-9999).');
       return;
     }
 
