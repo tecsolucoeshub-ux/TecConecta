@@ -40,8 +40,8 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
   const { isLight } = useTheme();
 
   const admContactUrl = buildWhatsAppUrl(
-    admWhatsapp || '11999999999',
-    `Olá ADM DaMaceno Soluções! Sou responsável pelo perfil cadastrado de "${provider.name}" (WhatsApp: ${provider.whatsapp}) e gostaria de solicitar uma atualização de dados cadastrais ou de foto.`
+    admWhatsapp || '64999317499',
+    `Olá ADM TecSoluções! Sou responsável pelo perfil cadastrado de "${provider.name}" (WhatsApp: ${provider.whatsapp}) e gostaria de solicitar uma atualização de dados cadastrais ou de foto.`
   );
 
   const defaultMessage = `Olá ${provider.name}, vi seu anúncio no TecConecta da DaMaceno Soluções e gostaria de solicitar um orçamento de ${provider.category}!`;

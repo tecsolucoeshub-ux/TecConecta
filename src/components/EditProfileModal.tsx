@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { X, Check, Trash2, MapPin, Search, AlertTriangle, MessageCircle, Building2, Phone, Sparkles, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { X, Check, Trash2, MapPin, Search, AlertTriangle, MessageCircle, Building2, Phone, Sparkles, RefreshCw, CheckCircle2, ExternalLink } from 'lucide-react';
 import { Provider } from '../types';
 import { CATEGORIES } from '../data/categories';
 import { updateProvider, deleteProvider } from '../services/firebase';
 import { fetchAddressByCep } from '../utils/cepGeocoding';
 import { ImageUploadField } from './ImageUploadField';
-import { normalizeWhatsAppNumber } from '../utils/whatsapp';
+import { normalizeWhatsAppNumber, validateWhatsAppNumber, buildWhatsAppUrl, formatWhatsAppForDisplay } from '../utils/whatsapp';
 
 interface EditProfileModalProps {
   isOpen: boolean;
@@ -52,6 +52,20 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Real-time WhatsApp validator for editor
+  const whatsappValidation = useMemo(() => validateWhatsAppNumber(whatsapp), [whatsapp]);
+
+  const handleWhatsappChange = (val: string) => {
+    let raw = val.replace(/\D/g, '');
+    if (raw.startsWith('0')) raw = raw.replace(/^0+/, '');
+    if (raw.startsWith('55') && raw.length > 11) raw = raw.slice(2);
+    const digits = raw.slice(0, 11);
+    let formatted = digits;
+    if (digits.length > 2) formatted = `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    if (digits.length > 7) formatted = `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+    setWhatsapp(formatted);
+  };
+
   // Sync state when targetProvider or modal opens
   useEffect(() => {
     if (targetProvider) {
@@ -94,7 +108,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
     setAddress(p.address);
     setNeighborhood(p.neighborhood || '');
     setCity(p.city);
-    setWhatsapp(p.whatsapp);
+    setWhatsapp(formatWhatsAppForDisplay(p.whatsapp));
     setDescription(p.description || '');
     setImageUrl(p.imageUrl || '');
     setLat(p.lat);
@@ -166,9 +180,8 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
       return;
     }
 
-    const cleanWhatsapp = normalizeWhatsAppNumber(whatsapp);
-    if (cleanWhatsapp.length < 10) {
-      setErrorMessage('WhatsApp inválido. Digite o DDD + número (ex: (64) 99999-9999).');
+    if (!whatsappValidation.isValid) {
+      setErrorMessage(whatsappValidation.error || 'WhatsApp inválido. Digite o DDD + número (ex: (64) 99931-7499).');
       return;
     }
 
@@ -183,7 +196,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
         address: address.trim() || 'Atendimento Local',
         neighborhood: neighborhood.trim() || undefined,
         city: city.trim(),
-        whatsapp: cleanWhatsapp,
+        whatsapp: whatsappValidation.normalized,
         description: description.trim() || undefined,
         imageUrl: imageUrl.trim() || undefined,
         lat,
@@ -408,22 +421,63 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
 
               {/* WhatsApp */}
               <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1">
-                  WhatsApp com DDD (somente números) *
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-gray-300">
+                    WhatsApp com DDD *
+                  </label>
+                  {whatsapp && whatsappValidation.isValid && (
+                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Válido
+                    </span>
+                  )}
+                </div>
                 <input
                   type="tel"
                   value={whatsapp}
-                  onChange={(e) => {
-                    let raw = e.target.value.replace(/\D/g, '');
-                    if (raw.startsWith('0')) raw = raw.replace(/^0+/, '');
-                    if (raw.startsWith('55') && raw.length > 11) raw = raw.slice(2);
-                    setWhatsapp(raw.slice(0, 11));
-                  }}
-                  placeholder="Ex: 64999998888"
+                  onChange={(e) => handleWhatsappChange(e.target.value)}
+                  placeholder="Ex: (64) 99931-7499"
                   required
-                  className="w-full rounded-xl bg-white/5 border border-white/15 px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-[#00E5FF] transition"
+                  className={`w-full rounded-xl bg-white/5 border px-3 py-2 text-xs sm:text-sm text-white focus:outline-none transition ${
+                    whatsapp && !whatsappValidation.isValid
+                      ? 'border-amber-500/60 focus:border-amber-400'
+                      : whatsapp && whatsappValidation.isValid
+                      ? 'border-emerald-500/60 focus:border-emerald-400'
+                      : 'border-white/15 focus:border-[#00E5FF]'
+                  }`}
                 />
+
+                {/* Real-time feedback and direct link test */}
+                {whatsapp ? (
+                  whatsappValidation.isValid ? (
+                    <div className="mt-1.5 flex items-center justify-between gap-2 p-2 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-[11px]">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span className="truncate">
+                          Válido: <strong>+55 {whatsappValidation.formatted}</strong>
+                        </span>
+                      </div>
+                      <a
+                        href={buildWhatsAppUrl(whatsappValidation.normalized, 'Olá! Teste de abertura direta pelo TecConecta.')}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded bg-[#25D366] hover:bg-[#1EBE5D] text-white font-bold text-[10px] transition shadow"
+                        title="Testar abertura direta no seu WhatsApp"
+                      >
+                        <span>Testar link</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-amber-400 mt-1">
+                      {whatsappValidation.error}
+                    </p>
+                  )
+                ) : (
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    Ex: (64) 99931-7499. Salvo no padrão oficial WhatsApp wa.me direto.
+                  </p>
+                )}
               </div>
 
               {/* CEP */}

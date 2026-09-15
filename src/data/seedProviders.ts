@@ -11,7 +11,7 @@ export const SEED_PROVIDERS: Provider[] = [
     cep: '75912-182',
     lat: -17.7915,
     lng: -50.9201,
-    whatsapp: '64999999999',
+    whatsapp: '64999317499',
     createdAt: '2026-03-01T08:00:00Z',
     description: 'Atendimento de Soluções com IA em Rio Verde - GO. Contato direto via WhatsApp!',
     rating: 5.0,

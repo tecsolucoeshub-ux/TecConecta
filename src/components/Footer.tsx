@@ -17,8 +17,8 @@ export const Footer: React.FC<FooterProps> = ({
   admWhatsapp,
 }) => {
   const admContactUrl = buildWhatsAppUrl(
-    admWhatsapp || '11999999999',
-    'Olá ADM DaMaceno Soluções! Sou um anunciante cadastrado no TecConecta e gostaria de solicitar uma alteração ou exclusão de dados do meu perfil.'
+    admWhatsapp || '64999317499',
+    'Olá ADM TecSoluções! Sou um anunciante cadastrado no TecConecta e gostaria de solicitar uma alteração ou exclusão de dados do meu perfil.'
   );
   return (
     <footer className="mt-16 border-t border-white/10 bg-[#080E21] text-[#F4F7F6]">

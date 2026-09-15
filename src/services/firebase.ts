@@ -58,6 +58,14 @@ function deduplicateProviders(list: Provider[]): Provider[] {
 
   return list.filter((p) => {
     if (!p || !p.id) return false;
+    // Only update the initial legacy seed placeholder if it still has the old dummy numbers
+    if (
+      (p.id === 'prov-tecsolucoes' || p.id === 'prov-1') &&
+      p.whatsapp &&
+      (p.whatsapp === '64999999999' || p.whatsapp === '6499999999' || p.whatsapp === '11999999999')
+    ) {
+      p.whatsapp = '64999317499';
+    }
     if (p.whatsapp) {
       p.whatsapp = normalizeWhatsAppNumber(p.whatsapp);
     }
@@ -91,9 +99,8 @@ function getStoredProviders(): Provider[] {
       return SEED_PROVIDERS;
     }
     const unique = deduplicateProviders(parsed);
-    if (unique.length !== parsed.length) {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(unique));
-    }
+    // Always persist healed/normalized providers
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(unique));
     return unique;
   } catch (err) {
     console.warn('Could not read from localStorage, using seed providers:', err);
@@ -260,11 +267,11 @@ const LOCAL_STORAGE_ADMIN_KEY = 'tecconecta_admin_settings_v1';
 export const SEED_BANNERS: SponsoredBanner[] = [
   {
     id: 'banner-seed-1',
-    companyName: 'DaMaceno Soluções Cloud & Dev',
+    companyName: 'TecSoluções Cloud & IA',
     headline: 'Transformação Digital & Automação Inteligente',
     subtext: 'Sistemas web sob medida, automação no WhatsApp e consultoria em IA para sua empresa.',
     ctaText: 'Falar com Especialista',
-    whatsapp: '11999999999',
+    whatsapp: '64999317499',
     badgeText: 'Patrocinador Oficial',
     category: 'Tecnologia & Inovação',
     imageUrl: 'https://images.unsplash.com/photo-1551434678-e076c223a692?w=800&auto=format&fit=crop&q=80',
@@ -287,8 +294,8 @@ export const SEED_BANNERS: SponsoredBanner[] = [
 ];
 
 export const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
-  admWhatsapp: '11999999999',
-  admName: 'Departamento Administrativo DaMaceno Soluções',
+  admWhatsapp: '64999317499',
+  admName: 'Departamento Administrativo TecSoluções',
   bannerHeadline: 'Anuncie Sua Empresa Aqui',
   bannerSubtext: 'Entre em contato com o departamento administrativo e destaque sua marca para milhares de clientes locais.',
   adminPin: 'admin123'
@@ -298,7 +305,13 @@ export function fetchAdminSettings(): AdminSettings {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_ADMIN_KEY);
     if (raw) {
-      return { ...DEFAULT_ADMIN_SETTINGS, ...JSON.parse(raw) };
+      const parsed = { ...DEFAULT_ADMIN_SETTINGS, ...JSON.parse(raw) };
+      // Auto-heal placeholder numbers in stored admin settings
+      if (parsed.admWhatsapp === '11999999999' || parsed.admWhatsapp.includes('99999999')) {
+        parsed.admWhatsapp = '64999317499';
+        localStorage.setItem(LOCAL_STORAGE_ADMIN_KEY, JSON.stringify(parsed));
+      }
+      return parsed;
     }
   } catch (e) {
     console.error('Error reading admin settings:', e);
@@ -317,7 +330,22 @@ export async function fetchSponsoredBanners(): Promise<SponsoredBanner[]> {
     if (raw !== null) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        return parsed;
+        let modified = false;
+        const healed = parsed.map((b: SponsoredBanner) => {
+          if (b.whatsapp === '11999999999' || b.whatsapp.includes('99999999') || b.id === 'banner-seed-1') {
+            modified = true;
+            return {
+              ...b,
+              whatsapp: '64999317499',
+              companyName: b.companyName === 'DaMaceno Soluções Cloud & Dev' ? 'TecSoluções Cloud & IA' : b.companyName
+            };
+          }
+          return b;
+        });
+        if (modified) {
+          localStorage.setItem(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(healed));
+        }
+        return healed;
       }
     }
   } catch (e) {

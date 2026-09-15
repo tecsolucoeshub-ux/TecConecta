@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
-import { X, CheckCircle2, MapPin, Phone, Briefcase, Building, Sparkles, Navigation, AlertCircle, Search, Loader2 } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { X, CheckCircle2, MapPin, Phone, Briefcase, Building, Sparkles, Navigation, AlertCircle, Search, Loader2, ExternalLink } from 'lucide-react';
 import { Provider } from '../types';
 import { CATEGORIES } from '../data/categories';
 import { saveProvider } from '../services/firebase';
 import { fetchAddressByCep } from '../utils/cepGeocoding';
 import { ImageUploadField } from './ImageUploadField';
-import { normalizeWhatsAppNumber } from '../utils/whatsapp';
+import { normalizeWhatsAppNumber, validateWhatsAppNumber, buildWhatsAppUrl } from '../utils/whatsapp';
 
 interface RegisterModalProps {
   isOpen: boolean;
@@ -44,6 +44,9 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  // Real-time WhatsApp validator
+  const whatsappValidation = useMemo(() => validateWhatsAppNumber(whatsapp), [whatsapp]);
 
   // Format WhatsApp input: (XX) 9XXXX-XXXX, removing any pasted 55 or leading 0
   const handleWhatsappChange = (val: string) => {
@@ -141,9 +144,8 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     if (isSubmitting) return;
     setErrorMessage(null);
 
-    const cleanWhatsapp = normalizeWhatsAppNumber(whatsapp);
-    if (cleanWhatsapp.length < 10) {
-      setErrorMessage('Por favor, informe um WhatsApp válido com DDD (ex: (64) 99999-9999).');
+    if (!whatsappValidation.isValid) {
+      setErrorMessage(whatsappValidation.error || 'Por favor, informe um WhatsApp válido com DDD (ex: (64) 99931-7499).');
       return;
     }
 
@@ -168,7 +170,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
         cep: cep.trim() || undefined,
         lat: Number(lat),
         lng: Number(lng),
-        whatsapp: cleanWhatsapp,
+        whatsapp: whatsappValidation.normalized,
         description: description.trim() || `Atendimento de ${finalCategory} em ${city}. Contato direto via WhatsApp!`,
         imageUrl: imageUrl.trim() || undefined,
         createdAt: new Date().toISOString(),
@@ -316,19 +318,66 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
             {/* WhatsApp */}
             <div>
-              <label className="block text-xs font-semibold text-gray-300 mb-1.5 flex items-center gap-1.5">
-                <Phone className="w-3.5 h-3.5 text-[#00E5FF]" />
-                WhatsApp com DDD (Somente Números) *
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5 text-[#00E5FF]" />
+                  WhatsApp com DDD (Ex: 64999317499) *
+                </label>
+                {whatsapp && whatsappValidation.isValid && (
+                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" />
+                    Válido
+                  </span>
+                )}
+              </div>
               <input
                 id="input-provider-whatsapp"
                 type="text"
                 required
                 value={whatsapp}
                 onChange={(e) => handleWhatsappChange(e.target.value)}
-                placeholder="(11) 98765-4321"
-                className="w-full rounded-xl bg-white/5 border border-white/15 px-3.5 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#00E5FF] transition"
+                placeholder="(64) 99931-7499"
+                className={`w-full rounded-xl bg-white/5 border px-3.5 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none transition ${
+                  whatsapp && !whatsappValidation.isValid
+                    ? 'border-amber-500/60 focus:border-amber-400'
+                    : whatsapp && whatsappValidation.isValid
+                    ? 'border-emerald-500/60 focus:border-emerald-400'
+                    : 'border-white/15 focus:border-[#00E5FF]'
+                }`}
               />
+
+              {/* Real-time feedback and direct link test */}
+              {whatsapp ? (
+                whatsappValidation.isValid ? (
+                  <div className="mt-1.5 flex items-center justify-between gap-2 p-2 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-[11px]">
+                    <div className="flex items-center gap-1.5 truncate">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span className="truncate">
+                        WhatsApp verificado: <strong>+55 {whatsappValidation.formatted}</strong>
+                      </span>
+                    </div>
+                    <a
+                      href={buildWhatsAppUrl(whatsappValidation.normalized, 'Olá! Teste de abertura de conversa direta pelo TecConecta.')}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded bg-[#25D366] hover:bg-[#1EBE5D] text-white font-bold text-[10px] transition shadow"
+                      title="Testar abertura direta no seu WhatsApp"
+                    >
+                      <span>Testar link</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                ) : (
+                  <div className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-300/90 bg-amber-500/10 px-2 py-1 rounded-md border border-amber-500/20">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                    <span>{whatsappValidation.error}</span>
+                  </div>
+                )
+              ) : (
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Digite seu DDD (2 dígitos) + celular (9 dígitos). O link oficial direto para mensagens será gerado automaticamente sem erros de SMS.
+                </p>
+              )}
             </div>
           </div>
 

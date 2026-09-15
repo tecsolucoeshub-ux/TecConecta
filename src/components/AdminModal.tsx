@@ -26,7 +26,7 @@ import { SponsoredBanner, AdminSettings, Provider } from '../types';
 import { CATEGORIES } from '../data/categories';
 import { saveSponsoredBanner, deleteSponsoredBanner, saveAdminSettings } from '../services/firebase';
 import { ImageUploadField } from './ImageUploadField';
-import { normalizeWhatsAppNumber } from '../utils/whatsapp';
+import { normalizeWhatsAppNumber, validateWhatsAppNumber } from '../utils/whatsapp';
 
 interface AdminModalProps {
   isOpen: boolean;
@@ -200,6 +200,12 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       return;
     }
 
+    const val = validateWhatsAppNumber(bannerWhatsapp);
+    if (!val.isValid) {
+      alert(val.error || 'WhatsApp do banner inválido.');
+      return;
+    }
+
     setBannerSaving(true);
     try {
       const newBanner: SponsoredBanner = {
@@ -207,7 +213,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
         companyName: companyName.trim(),
         headline: headline.trim(),
         subtext: subtext.trim() || 'Entre em contato pelo WhatsApp.',
-        whatsapp: normalizeWhatsAppNumber(bannerWhatsapp),
+        whatsapp: val.normalized,
         badgeText: badgeText.trim() || 'Patrocinador',
         category: category.trim() || 'Comércio Local',
         imageUrl: bannerImageUrl.trim() || undefined,
@@ -278,9 +284,14 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   // Save General Settings
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
+    const val = validateWhatsAppNumber(admWhatsapp);
+    if (!val.isValid) {
+      alert(val.error || 'WhatsApp do Administrador inválido.');
+      return;
+    }
     const updated: AdminSettings = {
       ...adminSettings,
-      admWhatsapp: normalizeWhatsAppNumber(admWhatsapp),
+      admWhatsapp: val.normalized,
       admName: admName.trim(),
       bannerHeadline: bannerHeadline.trim(),
       bannerSubtext: bannerSubtext.trim(),
@@ -603,7 +614,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                             type="text"
                             value={bannerWhatsapp}
                             onChange={(e) => setBannerWhatsapp(e.target.value)}
-                            placeholder="Ex: 11999998888"
+                            placeholder="Ex: 64999317499"
                             required
                             className="w-full rounded-lg bg-[#0B132B] border border-white/15 px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00E5FF]"
                           />
@@ -995,7 +1006,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                           type="text"
                           value={admWhatsapp}
                           onChange={(e) => setAdmWhatsapp(e.target.value)}
-                          placeholder="Ex: 11999999999"
+                          placeholder="Ex: 64999317499"
                           required
                           className="w-full rounded-xl bg-[#0B132B] border border-white/15 px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00E5FF]"
                         />
