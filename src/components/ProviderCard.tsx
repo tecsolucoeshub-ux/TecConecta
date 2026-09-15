@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageCircle, MapPin, Star, ShieldCheck, ImageIcon, Camera, Edit3 } from 'lucide-react';
+import { MessageCircle, MapPin, Star, ShieldCheck, ImageIcon, Edit3 } from 'lucide-react';
 import { Provider } from '../types';
 import { useTheme } from '../context/ThemeContext';
 import { getProviderPhoto, generateFallbackBrandImage, CATEGORY_DEFAULT_PHOTOS } from '../utils/imageCompressor';
@@ -11,6 +11,7 @@ interface ProviderCardProps {
   onFocusOnMap?: (provider: Provider) => void;
   onOpenReview?: (provider: Provider) => void;
   onEditProfile?: (provider: Provider) => void;
+  isAdmin?: boolean;
   admWhatsapp?: string;
   isSelected?: boolean;
 }
@@ -36,6 +37,7 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
   onFocusOnMap,
   onOpenReview,
   onEditProfile,
+  isAdmin = false,
   admWhatsapp,
   isSelected = false,
 }) => {
@@ -105,22 +107,6 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
 
         {/* Gradient Shadow Overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent pointer-events-none" />
-
-        {/* Direct "Trocar Foto" action button on the photo */}
-        {onEditProfile && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEditProfile(provider);
-            }}
-            className="absolute bottom-2 left-2.5 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/75 hover:bg-[#00E5FF] text-white hover:text-[#0B132B] border border-white/20 hover:border-transparent text-[10px] font-bold backdrop-blur-md shadow-md transition pointer-events-auto"
-            title="Trocar a foto de perfil do anunciante"
-          >
-            <Camera className="w-3.5 h-3.5" />
-            <span>Trocar Foto</span>
-          </button>
-        )}
 
         {/* Top Badges over image */}
         <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1.5 pointer-events-none">
@@ -277,28 +263,30 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
               isLight ? 'border-slate-100 text-slate-500' : 'border-white/5 text-gray-400'
             }`}
           >
-            <span className="truncate">É anunciante?</span>
+            <span className="truncate">É anunciante? Alterar dados ou foto:</span>
             <div className="flex items-center gap-2 shrink-0">
-              {onEditProfile && (
+              {isAdmin && onEditProfile && (
                 <button
                   type="button"
                   onClick={() => onEditProfile(provider)}
                   className={`hover:underline font-bold flex items-center gap-1 ${
                     isLight ? 'text-[#0097A7]' : 'text-[#00E5FF]'
                   }`}
-                  title="Editar dados e foto de perfil deste anúncio"
+                  title="Acesso Administrador: Editar dados ou foto deste anúncio"
                 >
                   <Edit3 className="w-3 h-3" />
-                  <span>Editar Perfil & Foto</span>
+                  <span>[ADM] Editar / Foto</span>
                 </button>
               )}
-              <span className="opacity-40">•</span>
+              {isAdmin && onEditProfile && <span className="opacity-40">•</span>}
               <a
                 href={admContactUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:underline text-gray-400 hover:text-gray-200"
-                title="Falar com ADM via WhatsApp"
+                className={`hover:underline font-semibold ${
+                  isLight ? 'text-[#0097A7]' : 'text-[#00E5FF]'
+                }`}
+                title="Falar com a administração pelo WhatsApp para solicitar alterações"
               >
                 Falar com ADM
               </a>

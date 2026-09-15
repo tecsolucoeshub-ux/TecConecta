@@ -38,6 +38,7 @@ interface AdminModalProps {
   onSettingsUpdated: (settings: AdminSettings) => void;
   onDeleteProvider: (id: string) => void;
   onEditProvider?: (provider: Provider) => void;
+  onAuthChange?: (isAuthenticated: boolean) => void;
 }
 
 const SESSION_AUTH_KEY = 'tecconecta_admin_session_auth';
@@ -52,6 +53,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   onSettingsUpdated,
   onDeleteProvider,
   onEditProvider,
+  onAuthChange,
 }) => {
   // Authentication & Session
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -120,6 +122,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     if (passwordInput.trim() === currentSavedPin || (currentSavedPin === 'admin123' && passwordInput.trim() === 'admin123')) {
       setIsAuthenticated(true);
       sessionStorage.setItem(SESSION_AUTH_KEY, 'true');
+      onAuthChange?.(true);
       setPasswordInput('');
     } else {
       setAuthError('Senha de acesso incorreta. Verifique e tente novamente.');
@@ -150,6 +153,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     onSettingsUpdated(updated);
     setIsAuthenticated(true);
     sessionStorage.setItem(SESSION_AUTH_KEY, 'true');
+    onAuthChange?.(true);
     setIsSetupMode(false);
     setSetupNewPassword('');
     setSetupConfirmPassword('');
@@ -159,6 +163,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const handleLogout = () => {
     setIsAuthenticated(false);
     sessionStorage.removeItem(SESSION_AUTH_KEY);
+    onAuthChange?.(false);
     setPasswordInput('');
     setAuthError(null);
   };

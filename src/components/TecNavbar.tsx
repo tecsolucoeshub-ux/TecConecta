@@ -1,5 +1,5 @@
 import React from 'react';
-import { PlusCircle, ShieldCheck, Sun, Moon, Camera } from 'lucide-react';
+import { PlusCircle, ShieldCheck, Sun, Moon } from 'lucide-react';
 import { TecLogo } from './TecLogo';
 import { PWAInstallButton } from './PWAInstallButton';
 import { useTheme } from '../context/ThemeContext';
@@ -7,13 +7,11 @@ import { useTheme } from '../context/ThemeContext';
 interface TecNavbarProps {
   onOpenRegister: () => void;
   onOpenPrivacyPolicy: () => void;
-  onOpenEditProfile?: () => void;
 }
 
 export const TecNavbar: React.FC<TecNavbarProps> = ({
   onOpenRegister,
   onOpenPrivacyPolicy,
-  onOpenEditProfile,
 }) => {
   const { isLight, toggleTheme } = useTheme();
 
@@ -86,23 +84,6 @@ export const TecNavbar: React.FC<TecNavbarProps> = ({
             <ShieldCheck className="w-3.5 h-3.5 text-[#00E5FF]" />
             <span className="hidden sm:inline">Termos</span>
           </button>
-
-          {/* Anunciante: Editar Anúncio / Trocar Foto */}
-          {onOpenEditProfile && (
-            <button
-              id="btn-nav-edit-profile"
-              onClick={onOpenEditProfile}
-              className={`flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold transition ${
-                isLight
-                  ? 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700 hover:text-[#0097A7]'
-                  : 'bg-white/5 hover:bg-white/10 border-white/10 text-gray-300 hover:text-[#00E5FF] hover:border-[#00E5FF]/40'
-              }`}
-              title="Área do Anunciante: Alterar dados e trocar foto de perfil"
-            >
-              <Camera className="w-3.5 h-3.5 text-[#00E5FF]" />
-              <span className="hidden md:inline">Trocar Foto / Editar</span>
-            </button>
-          )}
 
           {/* Cadastrar meu Negócio Primary Button */}
           <button

@@ -83,6 +83,9 @@ export default function App() {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [providerToReview, setProviderToReview] = useState<Provider | null>(null);
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
+    return typeof window !== 'undefined' && sessionStorage.getItem('tecconecta_admin_session_auth') === 'true';
+  });
 
   const handleOpenReview = (provider: Provider) => {
     setProviderToReview(provider);
@@ -395,10 +398,6 @@ export default function App() {
       <TecNavbar
         onOpenRegister={() => setIsRegisterOpen(true)}
         onOpenPrivacyPolicy={() => setIsPrivacyPolicyOpen(true)}
-        onOpenEditProfile={() => {
-          setProviderToEdit(null);
-          setIsEditProfileOpen(true);
-        }}
       />
 
       {/* Floating Success Toast */}
@@ -651,6 +650,7 @@ export default function App() {
                       setProviderToEdit(p);
                       setIsEditProfileOpen(true);
                     }}
+                    isAdmin={isAdminAuthenticated}
                     isSelected={selectedProvider?.id === provider.id}
                     admWhatsapp={adminSettings.admWhatsapp}
                   />
@@ -832,6 +832,7 @@ export default function App() {
         providers={providers}
         onBannersUpdated={(updated) => setBanners(updated)}
         onSettingsUpdated={(updated) => setAdminSettings(updated)}
+        onAuthChange={setIsAdminAuthenticated}
         onDeleteProvider={(deletedId) => {
           setProviders((prev) => prev.filter((p) => p.id !== deletedId));
           if (selectedProvider?.id === deletedId) {
