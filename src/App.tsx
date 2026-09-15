@@ -21,6 +21,7 @@ import { Footer } from './components/Footer';
 import { fetchAddressByCep } from './utils/cepGeocoding';
 import { useTheme } from './context/ThemeContext';
 import { buildWhatsAppUrl } from './utils/whatsapp';
+import { matchesProviderSearch } from './utils/search';
 
 // Haversine distance calculator for proximity sorting
 function calcDist(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -49,17 +50,23 @@ export default function App() {
   const [isLocating, setIsLocating] = useState(false);
   const [locationStatus, setLocationStatus] = useState<string | null>(null);
 
-  // Active Locality (via CEP, City, or GPS persistence)
+  // Active Locality (City or GPS proximity; decoupled from registration CEP)
   const [activeLocality, setActiveLocality] = useState<LocalityInfo | null>(() => {
     try {
       const saved = localStorage.getItem('tecconecta_active_locality');
-      return saved ? JSON.parse(saved) : null;
+      if (!saved) return null;
+      const parsed = JSON.parse(saved);
+      // Transient CEP rule: Registered CEP must never lock the visitor screen
+      if (parsed?.source === 'cep') {
+        localStorage.removeItem('tecconecta_active_locality');
+        return null;
+      }
+      return parsed;
     } catch {
       return null;
     }
   });
   const [isLocalityModalOpen, setIsLocalityModalOpen] = useState(false);
-  const [isSearchingCepInline, setIsSearchingCepInline] = useState(false);
 
   // Selected Provider on Map / Card
   const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
@@ -222,36 +229,6 @@ export default function App() {
     }
   };
 
-  // Inline CEP detection in the search bar
-  const detectedCepInSearch = useMemo(() => {
-    const digits = searchQuery.replace(/\D/g, '');
-    return digits.length === 8 ? digits : null;
-  }, [searchQuery]);
-
-  const handleApplySearchCep = async () => {
-    if (!detectedCepInSearch) return;
-    setIsSearchingCepInline(true);
-    try {
-      const res = await fetchAddressByCep(detectedCepInSearch);
-      const loc: LocalityInfo = {
-        label: `${res.neighborhood ? res.neighborhood + ', ' : ''}${res.city} - ${res.state}`,
-        lat: res.lat,
-        lng: res.lng,
-        cep: res.cep,
-        source: 'cep'
-      };
-      handleSelectLocality(loc);
-      setToastMessage(`Região atualizada para ${loc.label}!`);
-      setTimeout(() => setToastMessage(null), 4000);
-      setSearchQuery('');
-    } catch (e: any) {
-      setToastMessage(e.message || 'Erro ao localizar CEP.');
-      setTimeout(() => setToastMessage(null), 4000);
-    } finally {
-      setIsSearchingCepInline(false);
-    }
-  };
-
   // Clear demo data
   const handleClearDemoData = () => {
     const updated = clearDemoProviders();
@@ -333,20 +310,9 @@ export default function App() {
         return false;
       }
 
-      // Search query (matches name, category, city, neighborhood, description, cep)
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const matchName = p.name.toLowerCase().includes(q);
-        const matchCategory = p.category.toLowerCase().includes(q);
-        const matchCity = p.city.toLowerCase().includes(q);
-        const matchNeighborhood = p.neighborhood?.toLowerCase().includes(q) || false;
-        const matchAddress = p.address?.toLowerCase().includes(q) || false;
-        const matchDesc = p.description?.toLowerCase().includes(q) || false;
-        const matchCep = p.cep?.replace(/\D/g, '').includes(q.replace(/\D/g, '')) || false;
-
-        if (!matchName && !matchCategory && !matchCity && !matchNeighborhood && !matchAddress && !matchDesc && !matchCep) {
-          return false;
-        }
+      // Robust search query matching (accent-insensitive, multi-token across name, category, city, neighborhood, description)
+      if (!matchesProviderSearch(p, searchQuery)) {
+        return false;
       }
 
       return true;
@@ -413,15 +379,7 @@ export default function App() {
     });
 
     setSelectedProvider(newP);
-    // Focus locality immediately on the newly registered business
-    handleSelectLocality({
-      label: `${newP.neighborhood ? newP.neighborhood + ', ' : ''}${newP.city}`,
-      lat: newP.lat,
-      lng: newP.lng,
-      cep: newP.cep,
-      source: 'cep'
-    });
-    setToastMessage(`Negócio "${newP.name}" cadastrado com sucesso! Já está visível na sua região.`);
+    setToastMessage(`Negócio "${newP.name}" cadastrado com sucesso! Já está publicado e visível na plataforma.`);
     setTimeout(() => setToastMessage(null), 6000);
   };
 
@@ -437,6 +395,10 @@ export default function App() {
       <TecNavbar
         onOpenRegister={() => setIsRegisterOpen(true)}
         onOpenPrivacyPolicy={() => setIsPrivacyPolicyOpen(true)}
+        onOpenEditProfile={() => {
+          setProviderToEdit(null);
+          setIsEditProfileOpen(true);
+        }}
       />
 
       {/* Floating Success Toast */}
@@ -511,17 +473,17 @@ export default function App() {
           </div>
 
           {/* Search & Filter Bar */}
-          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 pt-1">
             {/* Search Input */}
-            <div className="sm:col-span-5 relative">
+            <div className="sm:col-span-7 relative">
               <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 id="search-input"
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar serviço, nome, bairro ou digite um CEP..."
-                className={`w-full rounded-xl border pl-10 pr-4 py-2.5 text-xs sm:text-sm focus:outline-none focus:border-[#00E5FF] focus:ring-1 focus:ring-[#00E5FF] transition ${
+                placeholder="Buscar por serviço, profissão, empresa, bairro..."
+                className={`w-full rounded-xl border pl-10 pr-8 py-2.5 text-xs sm:text-sm focus:outline-none focus:border-[#00E5FF] focus:ring-1 focus:ring-[#00E5FF] transition ${
                   isLight
                     ? 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
                     : 'bg-white/5 border-white/15 text-white placeholder-gray-400'
@@ -530,7 +492,8 @@ export default function App() {
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white text-xs"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white text-xs p-1"
+                  title="Limpar campo de pesquisa"
                 >
                   ✕
                 </button>
@@ -558,25 +521,6 @@ export default function App() {
               </select>
             </div>
 
-            {/* Locality & CEP Button */}
-            <div className="sm:col-span-2">
-              <button
-                id="btn-open-locality-modal"
-                onClick={() => setIsLocalityModalOpen(true)}
-                className={`w-full flex items-center justify-center gap-1.5 rounded-xl border px-2.5 py-2.5 text-xs font-semibold transition truncate ${
-                  activeLocality?.source === 'cep'
-                    ? 'bg-[#00E5FF]/20 border-[#00E5FF] text-[#00E5FF] shadow-[0_0_15px_rgba(0,229,255,0.25)]'
-                    : 'bg-white/5 border-white/15 text-gray-300 hover:text-white hover:border-[#00E5FF]/40'
-                }`}
-                title="Definir endereço ou CEP de pesquisa"
-              >
-                <MapPin className="w-3.5 h-3.5 text-[#00E5FF] shrink-0" />
-                <span className="truncate">
-                  {activeLocality ? (activeLocality.cep ? `CEP ${activeLocality.cep}` : 'Região Ativa') : 'Buscar CEP'}
-                </span>
-              </button>
-            </div>
-
             {/* GPS Proximity Button */}
             <div className="sm:col-span-2">
               <button
@@ -588,32 +532,13 @@ export default function App() {
                     ? 'bg-[#FF6B00]/20 border-[#FF6B00] text-[#FF6B00] shadow-[0_0_15px_rgba(255,107,0,0.25)]'
                     : 'bg-white/5 border-white/15 text-gray-300 hover:text-white hover:border-white/30'
                 }`}
-                title="Ativar ordenação por proximidade do seu GPS"
+                title="Ordenar resultados por proximidade do seu GPS"
               >
                 <Navigation className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''}`} />
-                <span>{isLocating ? 'Obtendo...' : userCoords ? 'GPS Ativo' : 'Meu GPS'}</span>
+                <span className="truncate">{isLocating ? 'Obtendo...' : userCoords ? 'GPS Ativo' : 'Meu GPS'}</span>
               </button>
             </div>
           </div>
-
-          {/* Quick CEP Suggestion if detected in search input */}
-          {detectedCepInSearch && (
-            <div className="p-2.5 rounded-xl bg-[#00E5FF]/15 border border-[#00E5FF]/40 flex items-center justify-between text-xs animate-fadeIn">
-              <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-[#00E5FF]" />
-                <span className="text-white">
-                  Detectamos o CEP <strong className="font-mono text-[#00E5FF]">{detectedCepInSearch}</strong> na busca.
-                </span>
-              </div>
-              <button
-                onClick={handleApplySearchCep}
-                disabled={isSearchingCepInline}
-                className="px-3 py-1 rounded-lg bg-[#00E5FF] text-[#0B132B] font-bold text-xs hover:bg-[#00E5FF]/90 transition"
-              >
-                {isSearchingCepInline ? 'Localizando...' : 'Focar nesta região agora'}
-              </button>
-            </div>
-          )}
 
           {locationStatus && (
             <p className="text-xs text-[#00E5FF] flex items-center gap-1.5 animate-fadeIn">
@@ -622,8 +547,8 @@ export default function App() {
             </p>
           )}
 
-          {/* Category Pills Filter */}
-          <div className="pt-1">
+          {/* Category Pills Filter - Hidden on mobile viewports as requested */}
+          <div className="pt-1 hidden sm:block">
             <CategoryFilter
               selectedCategory={selectedCategory}
               onSelectCategory={setSelectedCategory}
@@ -634,9 +559,9 @@ export default function App() {
       </section>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-3.5 sm:py-6">
         {/* Results Header */}
-        <div className="flex items-center justify-between gap-4 mb-5">
+        <div className="flex items-center justify-between gap-3 mb-3.5 sm:mb-5">
           <div className="flex items-center gap-2">
             <span className="font-['Outfit'] font-bold text-sm sm:text-base text-white">
               {viewMode === 'list' ? 'Prestadores Encontrados' : 'Mapa de Localização'}
@@ -690,7 +615,7 @@ export default function App() {
         {viewMode === 'list' && (
           <div>
             {filteredProviders.length === 0 ? (
-              <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-12 text-center max-w-md mx-auto space-y-4">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-8 sm:p-12 text-center max-w-md mx-auto space-y-4">
                 <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-gray-400">
                   <Search className="w-6 h-6" />
                 </div>
@@ -699,7 +624,7 @@ export default function App() {
                     Nenhum prestador encontrado
                   </h3>
                   <p className="text-xs text-gray-400 mt-1">
-                    Tente buscar com outro termo ou selecionar outra categoria.
+                    Tente buscar por outro termo, cidade ou selecionar outra categoria.
                   </p>
                 </div>
                 <button
@@ -710,11 +635,11 @@ export default function App() {
                   }}
                   className="px-4 py-2 rounded-xl bg-white/10 text-white text-xs font-semibold hover:bg-white/15 transition"
                 >
-                  Restaurar Filtros
+                  Restaurar Filtros e Ver Todos
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-5">
                 {filteredProviders.map((provider) => (
                   <ProviderCard
                     key={provider.id}
@@ -722,6 +647,10 @@ export default function App() {
                     userCoords={referenceCoords}
                     onFocusOnMap={handleFocusOnMap}
                     onOpenReview={handleOpenReview}
+                    onEditProfile={(p) => {
+                      setProviderToEdit(p);
+                      setIsEditProfileOpen(true);
+                    }}
                     isSelected={selectedProvider?.id === provider.id}
                     admWhatsapp={adminSettings.admWhatsapp}
                   />

@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, Image as ImageIcon, Link as LinkIcon, X, CheckCircle, AlertCircle, Sparkles } from 'lucide-react';
+import { Upload, Image as ImageIcon, Link as LinkIcon, X, CheckCircle, AlertCircle, Sparkles, Camera } from 'lucide-react';
 import { compressImageFile } from '../utils/imageCompressor';
 
 interface ImageUploadFieldProps {
@@ -26,20 +26,28 @@ export const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
 
   const handleFileProcess = async (file: File) => {
     setErrorMsg(null);
-    if (!file.type.startsWith('image/')) {
+    const isImageMime = file.type && file.type.startsWith('image/');
+    const isImageExt = file.name && /\.(jpe?g|png|webp|gif|bmp|heic|heif|svg|avif)$/i.test(file.name);
+
+    if (!isImageMime && !isImageExt && file.type !== '') {
       setErrorMsg('Por favor selecione um arquivo de imagem (JPG, PNG, WebP).');
       return;
     }
 
     setIsCompressing(true);
     try {
-      const compressed = await compressImageFile(file, 900, 0.82);
+      // Compress to optimal web dimensions (720px max, quality 0.8) for fast loading and low storage footprint
+      const compressed = await compressImageFile(file, 720, 0.8);
       onChange(compressed);
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || 'Falha ao processar a foto.');
     } finally {
       setIsCompressing(false);
+      // Reset input value so re-selecting the same file will trigger onChange
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -68,6 +76,13 @@ export const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
     }
   };
 
+  const triggerFilePicker = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+      fileInputRef.current.click();
+    }
+  };
+
   const handleApplyUrl = () => {
     if (!urlInput.trim()) return;
     onChange(urlInput.trim());
@@ -76,6 +91,15 @@ export const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
 
   return (
     <div className="space-y-2">
+      {/* Hidden file input ALWAYS present in the DOM for reliable programmatic click on mobile and desktop */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/jpg,image/webp,image/gif,image/*"
+        className="hidden"
+        onChange={handleFileInputChange}
+      />
+
       <div className="flex items-center justify-between">
         <label className={`block text-xs font-semibold ${isLight ? 'text-slate-800' : 'text-gray-200'}`}>
           {label}
@@ -117,45 +141,64 @@ export const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
 
       {/* Preview if image is present */}
       {value ? (
-        <div className={`relative rounded-xl overflow-hidden border p-2 flex items-center gap-3 ${
-          isLight ? 'bg-slate-50 border-slate-200' : 'bg-white/5 border-white/15'
-        }`}>
-          <div className="relative w-20 h-20 rounded-lg overflow-hidden shrink-0 border border-white/10 bg-black/40">
+        <div
+          className={`relative rounded-xl overflow-hidden border p-2.5 flex items-center gap-3.5 transition ${
+            isLight ? 'bg-slate-50 border-slate-200 shadow-sm' : 'bg-white/5 border-white/15'
+          }`}
+        >
+          {/* Clickable thumbnail with camera badge */}
+          <button
+            type="button"
+            onClick={triggerFilePicker}
+            className="group/thumb relative w-20 h-20 rounded-lg overflow-hidden shrink-0 border border-white/20 bg-black/40 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#00E5FF]"
+            title="Clique para escolher outra foto"
+          >
             <img
               src={value}
-              alt="Foto do negócio"
-              className="w-full h-full object-cover"
+              alt="Foto do anunciante"
+              className="w-full h-full object-cover group-hover/thumb:scale-105 transition-transform"
               referrerPolicy="no-referrer"
             />
-          </div>
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/thumb:opacity-100 flex flex-col items-center justify-center text-white text-[9px] font-bold transition-opacity">
+              <Camera className="w-4 h-4 text-[#00E5FF] mb-0.5" />
+              <span>Trocar</span>
+            </div>
+          </button>
 
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-green-400">
-              <CheckCircle className="w-3.5 h-3.5" />
-              <span className={isLight ? 'text-emerald-700' : 'text-emerald-400'}>Foto adicionada com sucesso!</span>
+            <div className="flex items-center gap-1.5 text-xs font-semibold">
+              <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span className={isLight ? 'text-emerald-700 font-bold' : 'text-emerald-400 font-bold'}>
+                Foto vinculada com sucesso!
+              </span>
             </div>
-            <p className={`text-[11px] truncate mt-0.5 ${isLight ? 'text-slate-500' : 'text-gray-400'}`}>
+            <p className={`text-[11px] truncate mt-0.5 ${isLight ? 'text-slate-500' : 'text-gray-300'}`}>
               Pronta para visualização nos cartões e buscas locais.
             </p>
             <div className="flex items-center gap-2 mt-2">
               <button
                 type="button"
-                onClick={() => {
-                  if (fileInputRef.current) fileInputRef.current.value = '';
-                  fileInputRef.current?.click();
-                }}
-                className={`text-xs font-semibold px-2.5 py-1 rounded-md transition ${
-                  isLight
-                    ? 'bg-slate-200 hover:bg-slate-300 text-slate-800'
-                    : 'bg-white/10 hover:bg-white/20 text-white'
-                }`}
+                onClick={triggerFilePicker}
+                disabled={isCompressing}
+                className="text-xs font-bold px-3 py-1.5 rounded-lg bg-[#00E5FF] text-[#0B132B] hover:brightness-110 active:scale-95 transition flex items-center gap-1.5 shadow-sm"
               >
-                Trocar Foto
+                {isCompressing ? (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5 animate-spin" />
+                    <span>Processando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>Trocar Foto</span>
+                  </>
+                )}
               </button>
               <button
                 type="button"
                 onClick={() => onChange('')}
-                className="text-xs font-semibold px-2 py-1 rounded-md text-red-400 hover:bg-red-500/20 transition flex items-center gap-1"
+                className="text-xs font-semibold px-2.5 py-1.5 rounded-lg text-red-400 hover:bg-red-500/20 border border-transparent hover:border-red-500/30 transition flex items-center gap-1"
+                title="Remover foto atual"
               >
                 <X className="w-3 h-3" />
                 <span>Remover</span>
@@ -172,7 +215,7 @@ export const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
               onDragLeave={handleDrag}
               onDragOver={handleDrag}
               onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={triggerFilePicker}
               className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition flex flex-col items-center justify-center gap-2 ${
                 dragActive
                   ? 'border-[#00E5FF] bg-[#00E5FF]/10'
@@ -181,13 +224,6 @@ export const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
                   : 'border-white/15 hover:border-[#00E5FF]/50 bg-white/[0.02] hover:bg-white/[0.05]'
               }`}
             >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleFileInputChange}
-              />
               <div className="w-10 h-10 rounded-full bg-[#00E5FF]/15 border border-[#00E5FF]/30 flex items-center justify-center text-[#00E5FF]">
                 {isCompressing ? (
                   <Sparkles className="w-5 h-5 animate-spin" />
@@ -200,7 +236,7 @@ export const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
                   {isCompressing ? 'Otimizando foto...' : 'Clique para escolher ou arraste a foto aqui'}
                 </p>
                 <p className={`text-[10px] mt-0.5 ${isLight ? 'text-slate-500' : 'text-gray-400'}`}>
-                  Suporta JPG, PNG ou WebP (redimensionamento automático inteligente)
+                  Suporta JPG, PNG ou WebP direto da galeria ou câmera
                 </p>
               </div>
             </div>

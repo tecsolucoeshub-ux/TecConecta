@@ -58,13 +58,22 @@ function deduplicateProviders(list: Provider[]): Provider[] {
 
   return list.filter((p) => {
     if (!p || !p.id) return false;
-    // Only update the initial legacy seed placeholder if it still has the old dummy numbers
+    // Only update the initial legacy seed placeholder if it still has the old dummy numbers or old centroid
     if (
       (p.id === 'prov-tecsolucoes' || p.id === 'prov-1') &&
       p.whatsapp &&
       (p.whatsapp === '64999999999' || p.whatsapp === '6499999999' || p.whatsapp === '11999999999')
     ) {
       p.whatsapp = '64999317499';
+    }
+    if (p.id === 'prov-tecsolucoes') {
+      p.lat = -17.8082;
+      p.lng = -50.9328;
+      p.cep = '75912-182';
+      // If photo was lost, empty or broken, restore the official tech avatar
+      if (!p.imageUrl || !p.imageUrl.trim()) {
+        p.imageUrl = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=80';
+      }
     }
     if (p.whatsapp) {
       p.whatsapp = normalizeWhatsAppNumber(p.whatsapp);
@@ -183,7 +192,7 @@ export async function saveProvider(provider: Provider): Promise<Provider> {
   if (firestoreDb) {
     try {
       const { doc, setDoc } = await import('firebase/firestore');
-      await setDoc(doc(firestoreDb, 'providers', provider.id), provider);
+      await setDoc(doc(firestoreDb, 'providers', provider.id), sanitizeForFirestore(provider), { merge: true });
     } catch (error) {
       console.warn('Firestore write fallback to local store:', error);
     }
@@ -193,6 +202,18 @@ export async function saveProvider(provider: Provider): Promise<Provider> {
   window.dispatchEvent(new CustomEvent('tecconecta:provider_added', { detail: provider }));
 
   return provider;
+}
+
+// Helper to strip undefined values so Firestore never rejects payloads
+function sanitizeForFirestore(data: any): any {
+  if (!data || typeof data !== 'object') return data;
+  const clean: Record<string, any> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== undefined) {
+      clean[key] = value;
+    }
+  }
+  return clean;
 }
 
 export async function updateProvider(id: string, updates: Partial<Provider>): Promise<Provider> {
@@ -217,8 +238,8 @@ export async function updateProvider(id: string, updates: Partial<Provider>): Pr
 
   if (firestoreDb) {
     try {
-      const { doc, updateDoc } = await import('firebase/firestore');
-      await updateDoc(doc(firestoreDb, 'providers', id), updates);
+      const { doc, setDoc } = await import('firebase/firestore');
+      await setDoc(doc(firestoreDb, 'providers', id), sanitizeForFirestore(updated), { merge: true });
     } catch (error) {
       console.warn('Firestore update fallback to local store:', error);
     }

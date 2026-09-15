@@ -198,7 +198,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
         city: city.trim(),
         whatsapp: whatsappValidation.normalized,
         description: description.trim() || undefined,
-        imageUrl: imageUrl.trim() || undefined,
+        imageUrl: imageUrl.trim(),
         lat,
         lng
       });
@@ -237,13 +237,13 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
             </div>
             <div>
               <h2 className="font-['Outfit'] text-xl font-bold text-white flex items-center gap-2">
-                Edição de Cadastro • Painel ADM
-                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-[#FF6B00]/20 text-[#FF6B00] border border-[#FF6B00]/40">
-                  Moderação
+                {selectedProvider ? `Editar Perfil • ${selectedProvider.name}` : 'Área do Anunciante • Perfil & Foto'}
+                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/40">
+                  {selectedProvider ? 'Foto & Dados' : 'Anunciante'}
                 </span>
               </h2>
               <p className="text-xs text-gray-400">
-                Edite os dados cadastrais ou remova o perfil conforme solicitado pelo anunciante
+                Altere a foto de perfil, dados de contato e informações do seu anúncio
               </p>
             </div>
           </div>

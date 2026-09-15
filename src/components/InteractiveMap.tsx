@@ -1,8 +1,9 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow, useMap } from '@vis.gl/react-google-maps';
-import { MessageCircle, MapPin, Star, Navigation, ExternalLink, Key, Layers, Compass, Plus, Minus, LocateFixed } from 'lucide-react';
+import { MessageCircle, MapPin, Star, Navigation, ExternalLink, Key, Layers, Compass, Plus, Minus, LocateFixed, Eye } from 'lucide-react';
 import { Provider } from '../types';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
+import { getProviderPhoto } from '../utils/imageCompressor';
 
 interface InteractiveMapProps {
   providers: Provider[];
@@ -13,15 +14,94 @@ interface InteractiveMapProps {
   centerCoords: { lat: number; lng: number };
 }
 
-// Controller component to smoothly pan the map whenever center changes
-const MapRecenterController: React.FC<{ center: { lat: number; lng: number } }> = ({ center }) => {
+// Controller component to smoothly pan the map ONLY when target/selection changes,
+// ensuring the user can pan and drag freely in all directions without snapping back
+const MapRecenterController: React.FC<{
+  center: { lat: number; lng: number };
+  selectedProvider: Provider | null;
+}> = ({ center, selectedProvider }) => {
   const map = useMap();
+  const lastTargetRef = useRef<string>('');
+
   useEffect(() => {
-    if (map && center && typeof center.lat === 'number' && typeof center.lng === 'number') {
+    if (!map || !center) return;
+    const key = selectedProvider
+      ? `prov-${selectedProvider.id}-${selectedProvider.lat.toFixed(4)}-${selectedProvider.lng.toFixed(4)}`
+      : `coord-${center.lat.toFixed(4)}-${center.lng.toFixed(4)}`;
+
+    if (key !== lastTargetRef.current) {
+      lastTargetRef.current = key;
       map.panTo(center);
+      if (selectedProvider) {
+        map.setZoom(16);
+      }
     }
-  }, [map, center.lat, center.lng]);
+  }, [map, center, selectedProvider]);
+
   return null;
+};
+
+// Manager component for Street View (Pegman / 360° Street View Panorama)
+const StreetViewManager: React.FC<{
+  activeStreetViewCoords: { lat: number; lng: number } | null;
+  onCloseStreetView: () => void;
+}> = ({ activeStreetViewCoords, onCloseStreetView }) => {
+  const map = useMap();
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!map) return;
+    const pano = map.getStreetView();
+    if (!pano) return;
+
+    const listener = pano.addListener('visible_changed', () => {
+      const vis = pano.getVisible();
+      setIsOpen(vis);
+      if (!vis) {
+        onCloseStreetView();
+      }
+    });
+
+    return () => {
+      if (listener && typeof (listener as any).remove === 'function') {
+        (listener as any).remove();
+      } else if (typeof window !== 'undefined' && (window as any).google?.maps?.event) {
+        (window as any).google.maps.event.removeListener(listener);
+      }
+    };
+  }, [map, onCloseStreetView]);
+
+  useEffect(() => {
+    if (!map || !activeStreetViewCoords) return;
+    const pano = map.getStreetView();
+    if (pano) {
+      pano.setPosition(activeStreetViewCoords);
+      pano.setPov({ heading: 165, pitch: 0 });
+      pano.setVisible(true);
+      setIsOpen(true);
+    }
+  }, [map, activeStreetViewCoords]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-[#0B132B]/95 border border-[#00E5FF] px-3.5 py-2 rounded-xl shadow-2xl backdrop-blur-md">
+      <span className="w-2.5 h-2.5 rounded-full bg-[#00E5FF] animate-ping" />
+      <span className="text-xs font-bold text-white">Street View Ativo</span>
+      <button
+        type="button"
+        onClick={() => {
+          if (map) {
+            map.getStreetView()?.setVisible(false);
+          }
+          onCloseStreetView();
+        }}
+        className="ml-2 px-3 py-1 bg-[#00E5FF] hover:bg-[#00E5FF]/80 text-[#0B132B] font-bold text-xs rounded-lg transition"
+      >
+        Fechar Visão da Rua
+      </button>
+    </div>
+  );
 };
 
 export const InteractiveMap: React.FC<InteractiveMapProps> = ({
@@ -45,6 +125,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const [mapPan, setMapPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [streetViewCoords, setStreetViewCoords] = useState<{ lat: number; lng: number } | null>(null);
 
   const handleSaveKey = (k: string) => {
     setCustomKey(k);
@@ -70,12 +151,23 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         {/* Top Info Badge */}
         <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-[#0B132B]/90 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-[#00E5FF]/30 text-xs text-white shadow-lg">
           <span className="w-2 h-2 rounded-full bg-[#00E5FF] animate-ping" />
-          <span className="font-semibold">Google Maps Ativo</span>
+          <span className="font-semibold">Google Maps Interativo</span>
           <span className="text-gray-400">({providers.length} locais)</span>
         </div>
 
         {/* Change Key Option */}
-        <div className="absolute top-4 right-4 z-10">
+        <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+          {selectedProvider && (
+            <button
+              onClick={() => setStreetViewCoords({ lat: selectedProvider.lat, lng: selectedProvider.lng })}
+              className="flex items-center gap-1.5 bg-[#00E5FF] text-[#0B132B] font-bold px-3 py-1.5 rounded-xl border border-white/20 text-xs hover:brightness-110 transition shadow-lg"
+              title="Abrir Visão da Rua (Street View) no local selecionado"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Visão da Rua (Street View)</span>
+              <span className="sm:hidden">Street View</span>
+            </button>
+          )}
           <button
             onClick={() => setShowKeyInput(!showKeyInput)}
             className="flex items-center gap-1.5 bg-[#0B132B]/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/15 text-[11px] font-semibold text-gray-300 hover:text-white hover:border-[#00E5FF]/40 transition shadow-lg"
@@ -116,14 +208,21 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           <Map
             style={{ width: '100%', height: '100%' }}
             defaultCenter={mapCenter}
-            center={mapCenter}
             defaultZoom={13}
             mapId="DEMO_MAP_ID"
             gestureHandling="greedy"
             disableDefaultUI={false}
+            streetViewControl={true}
+            mapTypeControl={true}
+            fullscreenControl={true}
+            zoomControl={true}
             internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
           >
-            <MapRecenterController center={mapCenter} />
+            <MapRecenterController center={mapCenter} selectedProvider={selectedProvider} />
+            <StreetViewManager
+              activeStreetViewCoords={streetViewCoords}
+              onCloseStreetView={() => setStreetViewCoords(null)}
+            />
 
             {/* User GPS location marker */}
             {userCoords && (
@@ -189,14 +288,29 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
                   </h4>
                   <p className="text-xs text-gray-600 mt-0.5 flex items-center gap-1">
                     <MapPin className="w-3 h-3 text-red-500 shrink-0" />
-                    <span className="truncate">{selectedProvider.neighborhood || selectedProvider.city}</span>
+                    <span className="truncate">
+                      {selectedProvider.address || selectedProvider.neighborhood || selectedProvider.city}
+                      {selectedProvider.cep ? ` • CEP: ${selectedProvider.cep}` : ''}
+                    </span>
                   </p>
                   {selectedProvider.description && (
                     <p className="text-[11px] text-gray-500 mt-1 line-clamp-2">
                       {selectedProvider.description}
                     </p>
                   )}
-                  <div className="mt-2.5 pt-2 border-t border-gray-200">
+
+                  {/* Actions & Street View Controls */}
+                  <div className="mt-2.5 pt-2 border-t border-gray-200 flex flex-col gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setStreetViewCoords({ lat: selectedProvider.lat, lng: selectedProvider.lng })}
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-[#0B132B] hover:bg-[#080E21] text-[#00E5FF] text-xs font-bold transition shadow-sm border border-[#00E5FF]/30"
+                      title="Explorar rua e fachada com Street View em 360°"
+                    >
+                      <Eye className="w-3.5 h-3.5 text-[#00E5FF]" />
+                      <span>Visão da Rua (Street View 360°)</span>
+                    </button>
+
                     <a
                       href={buildWhatsAppUrl(
                         selectedProvider.whatsapp,
@@ -209,6 +323,16 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
                       <MessageCircle className="w-3.5 h-3.5 fill-white" />
                       <span>Conversar no WhatsApp</span>
                     </a>
+
+                    <a
+                      href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${selectedProvider.lat},${selectedProvider.lng}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-blue-600 hover:underline flex items-center justify-center gap-1 pt-0.5"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      <span>Abrir Street View em tela cheia</span>
+                    </a>
                   </div>
                 </div>
               </InfoWindow>
@@ -218,6 +342,13 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       </div>
     );
   }
+
+  // Auto-center fallback map when provider is selected
+  useEffect(() => {
+    if (selectedProvider) {
+      setMapPan({ x: 0, y: 0 });
+    }
+  }, [selectedProvider?.id]);
 
   // Graceful interactive local map viewer when VITE_GOOGLE_MAPS_API_KEY is not yet supplied
   // Converts lat/lng coordinates to visual canvas space around centerCoords
@@ -289,9 +420,10 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         </div>
       )}
 
-      {/* Interactive Map Visual Stage */}
+      {/* Interactive Map Visual Stage - Supports Dragging on Desktop & Touch Panning in all directions on Mobile */}
       <div
         className="relative flex-1 w-full h-full overflow-hidden cursor-grab active:cursor-grabbing"
+        style={{ touchAction: 'none' }}
         onMouseDown={(e) => {
           setIsDragging(true);
           setDragStart({ x: e.clientX - mapPan.x, y: e.clientY - mapPan.y });
@@ -302,6 +434,17 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         }}
         onMouseUp={() => setIsDragging(false)}
         onMouseLeave={() => setIsDragging(false)}
+        onTouchStart={(e) => {
+          if (e.touches.length === 1) {
+            setIsDragging(true);
+            setDragStart({ x: e.touches[0].clientX - mapPan.x, y: e.touches[0].clientY - mapPan.y });
+          }
+        }}
+        onTouchMove={(e) => {
+          if (!isDragging || e.touches.length !== 1) return;
+          setMapPan({ x: e.touches[0].clientX - dragStart.x, y: e.touches[0].clientY - dragStart.y });
+        }}
+        onTouchEnd={() => setIsDragging(false)}
       >
         {/* Background Technological Grid & Radar Rings */}
         <div className="absolute inset-0 bg-[#070D1E] overflow-hidden">
@@ -406,27 +549,37 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="rounded-2xl bg-[#0B132B]/95 border border-[#00E5FF]/50 shadow-[0_0_40px_rgba(0,229,255,0.25)] p-4 text-white backdrop-blur-md">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/40">
-                      {selectedProvider.category}
-                    </span>
-                    <span className="text-xs font-bold text-amber-400 flex items-center gap-0.5">
-                      <Star className="w-3.5 h-3.5 fill-amber-400" />
-                      <span>{selectedProvider.rating ? selectedProvider.rating.toFixed(1) : '5.0'}</span>
-                    </span>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-12 h-12 rounded-xl overflow-hidden border border-[#00E5FF]/40 shrink-0 bg-black/40">
+                    <img
+                      src={getProviderPhoto(selectedProvider.imageUrl, selectedProvider.category, selectedProvider.name)}
+                      alt={selectedProvider.name}
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
                   </div>
-                  <h4 className="font-['Outfit'] font-bold text-base text-white mt-1">
-                    {selectedProvider.name}
-                  </h4>
-                  <p className="text-xs text-gray-300 flex items-center gap-1 mt-0.5">
-                    <MapPin className="w-3 h-3 text-[#FF6B00] shrink-0" />
-                    <span>
-                      {selectedProvider.neighborhood ? `${selectedProvider.neighborhood}, ` : ''}
-                      {selectedProvider.city}
-                    </span>
-                  </p>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/40">
+                        {selectedProvider.category}
+                      </span>
+                      <span className="text-xs font-bold text-amber-400 flex items-center gap-0.5">
+                        <Star className="w-3.5 h-3.5 fill-amber-400" />
+                        <span>{selectedProvider.rating ? selectedProvider.rating.toFixed(1) : '5.0'}</span>
+                      </span>
+                    </div>
+                    <h4 className="font-['Outfit'] font-bold text-base text-white mt-1">
+                      {selectedProvider.name}
+                    </h4>
+                    <p className="text-xs text-gray-300 flex items-center gap-1 mt-0.5">
+                      <MapPin className="w-3 h-3 text-[#FF6B00] shrink-0" />
+                      <span>
+                        {selectedProvider.neighborhood ? `${selectedProvider.neighborhood}, ` : ''}
+                        {selectedProvider.city}
+                      </span>
+                    </p>
+                  </div>
                 </div>
                 <button
                   onClick={() => onSelectProvider(null)}
@@ -443,30 +596,44 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
               )}
 
               {/* Action Buttons */}
-              <div className="mt-3 pt-2.5 border-t border-white/10 flex items-center gap-2">
+              <div className="mt-3 pt-2.5 border-t border-white/10 flex flex-col gap-2">
                 <a
-                  href={buildWhatsAppUrl(
-                    selectedProvider.whatsapp,
-                    `Olá ${selectedProvider.name}, vi seu anúncio no TecConecta (DaMaceno Soluções) e gostaria de solicitar um orçamento para ${selectedProvider.category}!`
-                  )}
+                  href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${selectedProvider.lat},${selectedProvider.lng}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#25D366] to-[#128C7E] px-4 py-2.5 text-xs font-bold text-white shadow-lg hover:brightness-110 active:scale-[0.98] transition"
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#00E5FF]/10 border border-[#00E5FF]/40 px-4 py-2 text-xs font-bold text-[#00E5FF] hover:bg-[#00E5FF]/20 transition"
+                  title="Abrir a visão da rua oficial em 360 graus"
                 >
-                  <MessageCircle className="w-4 h-4 fill-white" />
-                  <span>Conversar no WhatsApp</span>
+                  <Eye className="w-3.5 h-3.5 text-[#00E5FF]" />
+                  <span>Visão da Rua (Street View Oficial)</span>
+                  <ExternalLink className="w-3 h-3 text-[#00E5FF]/70 ml-0.5" />
                 </a>
-                {onOpenReview && (
-                  <button
-                    type="button"
-                    onClick={() => onOpenReview(selectedProvider)}
-                    className="px-3 py-2.5 rounded-xl border border-amber-400/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition"
-                    title="Avaliar este prestador"
+
+                <div className="flex items-center gap-2">
+                  <a
+                    href={buildWhatsAppUrl(
+                      selectedProvider.whatsapp,
+                      `Olá ${selectedProvider.name}, vi seu anúncio no TecConecta (DaMaceno Soluções) e gostaria de solicitar um orçamento para ${selectedProvider.category}!`
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#25D366] to-[#128C7E] px-4 py-2.5 text-xs font-bold text-white shadow-lg hover:brightness-110 active:scale-[0.98] transition"
                   >
-                    <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                    <span>Avaliar</span>
-                  </button>
-                )}
+                    <MessageCircle className="w-4 h-4 fill-white" />
+                    <span>Conversar no WhatsApp</span>
+                  </a>
+                  {onOpenReview && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenReview(selectedProvider)}
+                      className="px-3 py-2.5 rounded-xl border border-amber-400/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition"
+                      title="Avaliar este prestador"
+                    >
+                      <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                      <span>Avaliar</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>

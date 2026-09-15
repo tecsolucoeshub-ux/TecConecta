@@ -1,5 +1,5 @@
 import React from 'react';
-import { PlusCircle, ShieldCheck, Sun, Moon } from 'lucide-react';
+import { PlusCircle, ShieldCheck, Sun, Moon, Camera } from 'lucide-react';
 import { TecLogo } from './TecLogo';
 import { PWAInstallButton } from './PWAInstallButton';
 import { useTheme } from '../context/ThemeContext';
@@ -7,11 +7,13 @@ import { useTheme } from '../context/ThemeContext';
 interface TecNavbarProps {
   onOpenRegister: () => void;
   onOpenPrivacyPolicy: () => void;
+  onOpenEditProfile?: () => void;
 }
 
 export const TecNavbar: React.FC<TecNavbarProps> = ({
   onOpenRegister,
   onOpenPrivacyPolicy,
+  onOpenEditProfile,
 }) => {
   const { isLight, toggleTheme } = useTheme();
 
@@ -23,9 +25,9 @@ export const TecNavbar: React.FC<TecNavbarProps> = ({
           : 'bg-[#0B132B]/90 border-white/10'
       }`}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
         {/* Brand & Logo */}
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-3 sm:gap-6 shrink-0">
           <TecLogo />
           
           <div
@@ -41,12 +43,12 @@ export const TecNavbar: React.FC<TecNavbarProps> = ({
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           {/* Theme Switcher Toggle (Claro / Escuro) */}
           <button
             id="btn-nav-toggle-theme"
             onClick={toggleTheme}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition text-xs font-semibold ${
+            className={`flex items-center gap-1 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border transition text-xs font-semibold ${
               isLight
                 ? 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800'
                 : 'bg-white/5 hover:bg-white/10 border-white/10 text-gray-200 hover:text-white'
@@ -74,7 +76,7 @@ export const TecNavbar: React.FC<TecNavbarProps> = ({
           <button
             id="btn-nav-privacy-policy"
             onClick={onOpenPrivacyPolicy}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition ${
+            className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold transition ${
               isLight
                 ? 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700 hover:text-[#0097A7]'
                 : 'bg-white/5 hover:bg-white/10 border-white/10 text-gray-300 hover:text-[#00E5FF] hover:border-[#00E5FF]/40'
@@ -85,14 +87,33 @@ export const TecNavbar: React.FC<TecNavbarProps> = ({
             <span className="hidden sm:inline">Termos</span>
           </button>
 
+          {/* Anunciante: Editar Anúncio / Trocar Foto */}
+          {onOpenEditProfile && (
+            <button
+              id="btn-nav-edit-profile"
+              onClick={onOpenEditProfile}
+              className={`flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold transition ${
+                isLight
+                  ? 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700 hover:text-[#0097A7]'
+                  : 'bg-white/5 hover:bg-white/10 border-white/10 text-gray-300 hover:text-[#00E5FF] hover:border-[#00E5FF]/40'
+              }`}
+              title="Área do Anunciante: Alterar dados e trocar foto de perfil"
+            >
+              <Camera className="w-3.5 h-3.5 text-[#00E5FF]" />
+              <span className="hidden md:inline">Trocar Foto / Editar</span>
+            </button>
+          )}
+
           {/* Cadastrar meu Negócio Primary Button */}
           <button
             id="btn-nav-register-business"
             onClick={onOpenRegister}
-            className="flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-[#00E5FF] to-[#FF6B00] text-[#0B132B] font-extrabold text-xs sm:text-sm tracking-wide shadow-[0_0_20px_rgba(0,229,255,0.35)] hover:brightness-110 active:scale-[0.98] transition shrink-0"
+            className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-[#00E5FF] to-[#FF6B00] text-[#0B132B] font-extrabold text-xs sm:text-sm tracking-wide shadow-[0_0_15px_rgba(0,229,255,0.3)] hover:brightness-110 active:scale-[0.98] transition shrink-0"
           >
-            <PlusCircle className="w-4 h-4 text-[#0B132B]" />
-            <span>Cadastrar Negócio</span>
+            <PlusCircle className="w-4 h-4 text-[#0B132B] shrink-0" />
+            <span className="hidden xs:inline sm:hidden">Anunciar</span>
+            <span className="hidden sm:inline">Cadastrar Negócio</span>
+            <span className="xs:hidden">Anunciar</span>
           </button>
         </div>
       </div>
