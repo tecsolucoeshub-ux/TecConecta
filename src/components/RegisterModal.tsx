@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { X, CheckCircle2, MapPin, Phone, Briefcase, Building, Sparkles, Navigation, AlertCircle, Search, Loader2, ExternalLink } from 'lucide-react';
 import { Provider } from '../types';
 import { CATEGORIES } from '../data/categories';
@@ -43,10 +43,29 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  if (!isOpen) return null;
-
-  // Real-time WhatsApp validator
+  // Real-time WhatsApp validator - ALWAYS called unconditionally to obey React Hook Rules
   const whatsappValidation = useMemo(() => validateWhatsAppNumber(whatsapp), [whatsapp]);
+
+  // Keep coordinates updated if user coordinates are acquired or change
+  useEffect(() => {
+    if (userCoords?.lat && userCoords?.lng) {
+      setLat(userCoords.lat);
+      setLng(userCoords.lng);
+    }
+  }, [userCoords?.lat, userCoords?.lng]);
+
+  // Close modal on Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  // Early return ONLY after all React Hooks have been declared
+  if (!isOpen) return null;
 
   // Format WhatsApp input: (XX) 9XXXX-XXXX, removing any pasted 55 or leading 0
   const handleWhatsappChange = (val: string) => {
@@ -199,7 +218,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="relative w-full max-w-xl max-h-[92vh] flex flex-col rounded-2xl bg-[#0B132B] border border-[#00E5FF]/30 shadow-[0_0_50px_rgba(0,229,255,0.2)] text-[#F4F7F6] overflow-hidden">
+      <div className="relative w-full max-w-xl max-h-[92vh] my-auto flex flex-col rounded-2xl bg-[#0B132B] border border-[#00E5FF]/30 shadow-[0_0_50px_rgba(0,229,255,0.2)] text-[#F4F7F6] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/10 px-6 py-4 bg-white/5">
           <div className="flex items-center gap-3">

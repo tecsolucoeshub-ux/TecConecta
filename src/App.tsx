@@ -2,14 +2,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Search, MapPin, Navigation, Sparkles, Filter, CheckCircle2, MessageCircle, AlertCircle, RefreshCw, Compass, Building2, Trash2 } from 'lucide-react';
 import { Provider, ViewMode, SponsoredBanner, AdminSettings } from './types';
 import { fetchProviders, clearDemoProviders, resetDemoProviders, fetchSponsoredBanners, fetchAdminSettings, DEFAULT_ADMIN_SETTINGS } from './services/firebase';
-import { POPULAR_CITIES, CATEGORIES } from './data/categories';
+import { POPULAR_CITIES } from './data/categories';
 import { TecNavbar } from './components/TecNavbar';
 import { TecBrandHero } from './components/TecBrandHero';
 import { MonetizationBanner } from './components/MonetizationBanner';
 import { EditProfileModal } from './components/EditProfileModal';
 import { AdminModal } from './components/AdminModal';
 import { ViewSwitcher } from './components/ViewSwitcher';
-import { CategoryFilter } from './components/CategoryFilter';
 import { ProviderCard } from './components/ProviderCard';
 import { InteractiveMap } from './components/InteractiveMap';
 import { RegisterModal } from './components/RegisterModal';
@@ -44,7 +43,6 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedCity, setSelectedCity] = useState('all');
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [isLocating, setIsLocating] = useState(false);
@@ -288,26 +286,9 @@ export default function App() {
     return null;
   }, [userCoords, activeLocality]);
 
-  // Unique custom categories registered across all providers
-  const customCategories = useMemo(() => {
-    const standardNames = new Set(CATEGORIES.map((c) => c.name.trim().toLowerCase()));
-    const customs = new Set<string>();
-    providers.forEach((p) => {
-      if (p.category && !standardNames.has(p.category.trim().toLowerCase())) {
-        customs.add(p.category.trim());
-      }
-    });
-    return Array.from(customs);
-  }, [providers]);
-
   // Filter and sort providers
   const filteredProviders = useMemo(() => {
     let result = providers.filter((p) => {
-      // Category filter
-      if (selectedCategory !== 'all' && p.category !== selectedCategory) {
-        return false;
-      }
-
       // City filter - If user is actively typing a service query, allow broad matching without locking/fixing search
       if (selectedCity !== 'all' && !searchQuery.trim() && !p.city.toLowerCase().includes(selectedCity.toLowerCase())) {
         return false;
@@ -353,7 +334,7 @@ export default function App() {
     }
 
     return uniqueResult;
-  }, [providers, selectedCategory, selectedCity, searchQuery, referenceCoords]);
+  }, [providers, selectedCity, searchQuery, referenceCoords]);
 
   // Center coordinates for map view
   const mapCenterCoords = useMemo(() => {
@@ -545,15 +526,6 @@ export default function App() {
               <span>{locationStatus}</span>
             </p>
           )}
-
-          {/* Category Pills Filter - Hidden on mobile viewports as requested */}
-          <div className="pt-1 hidden sm:block">
-            <CategoryFilter
-              selectedCategory={selectedCategory}
-              onSelectCategory={setSelectedCategory}
-              customCategories={customCategories}
-            />
-          </div>
         </div>
       </section>
 
@@ -590,15 +562,6 @@ export default function App() {
                 <span className="hidden sm:inline">Restaurar exemplos</span>
               </button>
             )}
-
-            {selectedCategory !== 'all' && (
-              <button
-                onClick={() => setSelectedCategory('all')}
-                className="text-[#00E5FF] hover:underline"
-              >
-                Limpar categoria
-              </button>
-            )}
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
@@ -623,13 +586,12 @@ export default function App() {
                     Nenhum prestador encontrado
                   </h3>
                   <p className="text-xs text-gray-400 mt-1">
-                    Tente buscar por outro termo, cidade ou selecionar outra categoria.
+                    Tente buscar por outro termo, profissão ou selecionar outra cidade.
                   </p>
                 </div>
                 <button
                   onClick={() => {
                     setSearchQuery('');
-                    setSelectedCategory('all');
                     setSelectedCity('all');
                   }}
                   className="px-4 py-2 rounded-xl bg-white/10 text-white text-xs font-semibold hover:bg-white/15 transition"
@@ -780,15 +742,17 @@ export default function App() {
       />
 
       {/* Simplified Provider Registration Modal (1 Minuto) */}
-      <RegisterModal
-        isOpen={isRegisterOpen}
-        onClose={() => setIsRegisterOpen(false)}
-        onSuccess={handleProviderCreated}
-        userCoords={referenceCoords}
-        onOpenPrivacyPolicy={() => {
-          setIsPrivacyPolicyOpen(true);
-        }}
-      />
+      {isRegisterOpen && (
+        <RegisterModal
+          isOpen={isRegisterOpen}
+          onClose={() => setIsRegisterOpen(false)}
+          onSuccess={handleProviderCreated}
+          userCoords={referenceCoords}
+          onOpenPrivacyPolicy={() => {
+            setIsPrivacyPolicyOpen(true);
+          }}
+        />
+      )}
 
       {/* Mandatory Privacy Policy & Legal Terms Modal */}
       <PrivacyPolicyModal
