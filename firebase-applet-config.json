@@ -1,9 +1,12 @@
 {
-  "apiKey": "",
-  "authDomain": "",
-  "projectId": "",
-  "storageBucket": "",
-  "messagingSenderId": "",
-  "appId": "",
-  "firestoreDatabaseId": "(default)"
+  "projectId": "gen-lang-client-0186877443",
+  "appId": "1:612539232318:web:0e7f2dcd9788e66597216f",
+  "apiKey": "AIzaSyAJ4PMflYZUolmjJEJ6MYTjy_ZY7Yn-KN8",
+  "authDomain": "gen-lang-client-01868774-51ba8.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-tecconecta-9b115914-37ef-4758-a369-f1b2494a4f28",
+  "storageBucket": "gen-lang-client-0186877443.firebasestorage.app",
+  "messagingSenderId": "612539232318",
+  "measurementId": "",
+  "oAuthClientId": "612539232318-lh7gaplup3oq4fvdpapto4ru157im8cj.apps.googleusercontent.com",
+  "recaptchaSiteKey": ""
 }
