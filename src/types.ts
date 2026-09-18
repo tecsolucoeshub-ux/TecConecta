@@ -1,3 +1,5 @@
+export type ProviderBusinessType = 'autonomo' | 'mei';
+
 export interface Provider {
   id: string;
   name: string;
@@ -16,6 +18,12 @@ export interface Provider {
   badge?: string;
   imageUrl?: string; // Photo of business / storefront / service / logo
   editPin?: string; // Optional security PIN defined by provider
+  businessType?: ProviderBusinessType; // 'autonomo' | 'mei' (strictly excluding large enterprises)
+  ownerEmail?: string;
+  ownerUid?: string;
+  ownerAuthMethod?: 'google' | 'email';
+  cpfOrCnpj?: string;
+  clicksCount?: number; // Total WhatsApp contact clicks tracked
 }
 
 export interface Review {
@@ -41,6 +49,7 @@ export interface SponsoredBanner {
   imageUrl?: string; // Banner / Logo / Showcase photo
   active: boolean;
   createdAt: string;
+  clicksCount?: number; // Total clicks tracked on banner
 }
 
 export interface AdminSettings {

@@ -4,6 +4,7 @@ import { SponsoredBanner, AdminSettings } from '../types';
 import { useTheme } from '../context/ThemeContext';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
 import { generateFallbackBrandImage } from '../utils/imageCompressor';
+import { recordBannerClick } from '../services/firebase';
 
 interface MonetizationBannerProps {
   banners: SponsoredBanner[];
@@ -45,7 +46,7 @@ export const MonetizationBanner: React.FC<MonetizationBannerProps> = ({
 
   const admContactUrl = buildWhatsAppUrl(
     adminSettings.admWhatsapp || '64999317499',
-    'Olá! Tenho interesse em anunciar minha empresa no banner de destaque do TecConecta (DaMaceno Soluções). Gostaria de mais informações sobre os planos.'
+    'Olá! Tenho interesse em anunciar minha empresa no banner de destaque do TecConecta (TecSoluções). Gostaria de mais informações sobre os planos.'
   );
 
   return (
@@ -163,8 +164,9 @@ export const MonetizationBanner: React.FC<MonetizationBannerProps> = ({
               <a
                 href={buildWhatsAppUrl(
                   currentBanner.whatsapp,
-                  `Olá ${currentBanner.companyName}, vi seu destaque no banner do TecConecta (DaMaceno Soluções)!`
+                  `Olá ${currentBanner.companyName}, vi seu destaque no banner do TecConecta (TecSoluções)!`
                 )}
+                onClick={() => recordBannerClick(currentBanner.id)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className={`flex-1 sm:flex-none px-3 py-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition text-center ${

@@ -74,7 +74,7 @@ export const TecLogo: React.FC<TecLogoProps> = ({ className = '', showTagline = 
         </div>
         {showTagline && (
           <span className={`text-[10px] font-medium tracking-wide mt-0.5 ${isLight ? 'text-slate-500' : 'text-gray-400'}`}>
-            por <strong className={`${isLight ? 'text-slate-800' : 'text-gray-200'} font-semibold`}>DaMaceno Soluções</strong>
+            por <strong className={`${isLight ? 'text-slate-800' : 'text-gray-200'} font-semibold`}>TecSoluções</strong>
           </span>
         )}
       </div>

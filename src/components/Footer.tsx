@@ -5,14 +5,12 @@ import { buildWhatsAppUrl } from '../utils/whatsapp';
 
 interface FooterProps {
   onOpenPrivacyPolicy: () => void;
-  onOpenRegister: () => void;
   onOpenAdmin?: () => void;
   admWhatsapp?: string;
 }
 
 export const Footer: React.FC<FooterProps> = ({
   onOpenPrivacyPolicy,
-  onOpenRegister,
   onOpenAdmin,
   admWhatsapp,
 }) => {
@@ -28,7 +26,7 @@ export const Footer: React.FC<FooterProps> = ({
           <div className="space-y-3">
             <TecLogo />
             <p className="text-xs text-gray-400 leading-relaxed max-w-sm">
-              O <strong>TecConecta</strong> é a plataforma tecnológica de geolocalização e conexão direta desenvolvida pela <strong>DaMaceno Soluções</strong>. Eliminamos intermediários e burocracias para fortalecer o comércio e os profissionais do seu bairro.
+              O <strong>TecConecta</strong> é a plataforma tecnológica de geolocalização e conexão direta desenvolvida pela <strong>TecSoluções</strong>. Eliminamos intermediários e burocracias para fortalecer o comércio e os profissionais autônomos do seu bairro.
             </p>
             <div className="flex items-center gap-2 text-xs text-[#00E5FF]">
               <Sparkles className="w-3.5 h-3.5" />
@@ -53,20 +51,23 @@ export const Footer: React.FC<FooterProps> = ({
             </button>
           </div>
 
-          {/* Quick Links & CTA */}
+          {/* Quick Links & ADM Contact */}
           <div className="space-y-3">
             <h4 className="font-['Outfit'] text-sm font-bold text-white">
-              Para Autônomos e Lojas
+              Para Autônomos e MEIs
             </h4>
-            <p className="text-xs text-gray-400">
-              Divulgue seus serviços no mapa da sua cidade em menos de 1 minuto sem pagar mensalidade ou taxas.
+            <p className="text-xs text-gray-400 leading-relaxed">
+              Exclusivo para profissionais autônomos e microempreendedores individuais. Cadastro único no topo da página, 100% grátis e sem comissões.
             </p>
-            <button
-              onClick={onOpenRegister}
-              className="px-4 py-2 rounded-xl bg-white/5 border border-[#00E5FF]/40 text-[#00E5FF] text-xs font-bold hover:bg-[#00E5FF]/10 transition flex items-center justify-center gap-2"
+            <a
+              href={admContactUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-semibold text-gray-300 hover:text-white hover:border-[#00E5FF]/40 transition"
             >
-              <span>Cadastrar meu Perfil Grátis</span>
-            </button>
+              <MessageCircle className="w-3.5 h-3.5 text-[#25D366]" />
+              <span>Suporte ao Anunciante</span>
+            </a>
           </div>
         </div>
 
@@ -89,7 +90,7 @@ export const Footer: React.FC<FooterProps> = ({
         {/* Bottom Bar */}
         <div className="mt-5 pt-4 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-400">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span>© {new Date().getFullYear()} TecConecta. Criado e mantido por DaMaceno Soluções. Todos os direitos reservados.</span>
+            <span>© {new Date().getFullYear()} TecConecta. Criado e mantido por TecSoluções. Todos os direitos reservados.</span>
             {onOpenAdmin && (
               <button
                 type="button"

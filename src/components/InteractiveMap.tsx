@@ -1,9 +1,23 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow, useMap } from '@vis.gl/react-google-maps';
-import { MessageCircle, MapPin, Star, Navigation, ExternalLink, Key, Layers, Compass, Plus, Minus, LocateFixed, Eye } from 'lucide-react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
+import L from 'leaflet';
+import { 
+  MessageCircle, 
+  MapPin, 
+  Star, 
+  Navigation, 
+  Layers, 
+  Plus, 
+  Minus, 
+  LocateFixed, 
+  ExternalLink,
+  ShieldCheck,
+  Compass
+} from 'lucide-react';
 import { Provider } from '../types';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
 import { getProviderPhoto } from '../utils/imageCompressor';
+import { useTheme } from '../context/ThemeContext';
+import { recordProviderClick } from '../services/firebase';
 
 interface InteractiveMapProps {
   providers: Provider[];
@@ -14,94 +28,24 @@ interface InteractiveMapProps {
   centerCoords: { lat: number; lng: number };
 }
 
-// Controller component to smoothly pan the map ONLY when target/selection changes,
-// ensuring the user can pan and drag freely in all directions without snapping back
-const MapRecenterController: React.FC<{
-  center: { lat: number; lng: number };
-  selectedProvider: Provider | null;
-}> = ({ center, selectedProvider }) => {
-  const map = useMap();
-  const lastTargetRef = useRef<string>('');
+type MapLayerType = 'dark' | 'light' | 'satellite';
 
-  useEffect(() => {
-    if (!map || !center) return;
-    const key = selectedProvider
-      ? `prov-${selectedProvider.id}-${selectedProvider.lat.toFixed(4)}-${selectedProvider.lng.toFixed(4)}`
-      : `coord-${center.lat.toFixed(4)}-${center.lng.toFixed(4)}`;
-
-    if (key !== lastTargetRef.current) {
-      lastTargetRef.current = key;
-      map.panTo(center);
-      if (selectedProvider) {
-        map.setZoom(16);
-      }
-    }
-  }, [map, center, selectedProvider]);
-
-  return null;
-};
-
-// Manager component for Street View (Pegman / 360° Street View Panorama)
-const StreetViewManager: React.FC<{
-  activeStreetViewCoords: { lat: number; lng: number } | null;
-  onCloseStreetView: () => void;
-}> = ({ activeStreetViewCoords, onCloseStreetView }) => {
-  const map = useMap();
-  const [isOpen, setIsOpen] = useState(false);
-
-  useEffect(() => {
-    if (!map) return;
-    const pano = map.getStreetView();
-    if (!pano) return;
-
-    const listener = pano.addListener('visible_changed', () => {
-      const vis = pano.getVisible();
-      setIsOpen(vis);
-      if (!vis) {
-        onCloseStreetView();
-      }
-    });
-
-    return () => {
-      if (listener && typeof (listener as any).remove === 'function') {
-        (listener as any).remove();
-      } else if (typeof window !== 'undefined' && (window as any).google?.maps?.event) {
-        (window as any).google.maps.event.removeListener(listener);
-      }
-    };
-  }, [map, onCloseStreetView]);
-
-  useEffect(() => {
-    if (!map || !activeStreetViewCoords) return;
-    const pano = map.getStreetView();
-    if (pano) {
-      pano.setPosition(activeStreetViewCoords);
-      pano.setPov({ heading: 165, pitch: 0 });
-      pano.setVisible(true);
-      setIsOpen(true);
-    }
-  }, [map, activeStreetViewCoords]);
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-[#0B132B]/95 border border-[#00E5FF] px-3.5 py-2 rounded-xl shadow-2xl backdrop-blur-md">
-      <span className="w-2.5 h-2.5 rounded-full bg-[#00E5FF] animate-ping" />
-      <span className="text-xs font-bold text-white">Street View Ativo</span>
-      <button
-        type="button"
-        onClick={() => {
-          if (map) {
-            map.getStreetView()?.setVisible(false);
-          }
-          onCloseStreetView();
-        }}
-        className="ml-2 px-3 py-1 bg-[#00E5FF] hover:bg-[#00E5FF]/80 text-[#0B132B] font-bold text-xs rounded-lg transition"
-      >
-        Fechar Visão da Rua
-      </button>
-    </div>
-  );
+const TILE_LAYERS: Record<MapLayerType, { url: string; attribution: string; maxZoom: number }> = {
+  dark: {
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://openstreetmap.org">OSM</a>',
+    maxZoom: 19
+  },
+  light: {
+    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://openstreetmap.org">OSM</a>',
+    maxZoom: 19
+  },
+  satellite: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: '&copy; Esri &mdash; Maxar, Earthstar Geographics',
+    maxZoom: 18
+  }
 };
 
 export const InteractiveMap: React.FC<InteractiveMapProps> = ({
@@ -110,562 +54,410 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   onSelectProvider,
   onOpenReview,
   userCoords,
-  centerCoords,
+  centerCoords
 }) => {
-  // Read key from environment or default to user provided Google Maps API key
-  const envKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyC9Qg-9yjovYIOTci6pzwBboUIAXRwLjdA';
-  const [customKey, setCustomKey] = useState<string>(() => {
-    return localStorage.getItem('tecconecta_custom_maps_key') || '';
-  });
-  const [showKeyInput, setShowKeyInput] = useState(false);
-  const effectiveKey = customKey.trim() || envKey.trim();
+  const { isLight } = useTheme();
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const markersLayerRef = useRef<L.LayerGroup | null>(null);
+  const userMarkerRef = useRef<L.Marker | null>(null);
 
-  // Fallback map state for when key is absent
-  const [zoomLevel, setZoomLevel] = useState(13);
-  const [mapPan, setMapPan] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [streetViewCoords, setStreetViewCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [activeLayer, setActiveLayer] = useState<MapLayerType>(isLight ? 'light' : 'dark');
+  const [showLayerMenu, setShowLayerMenu] = useState(false);
+  const [currentZoom, setCurrentZoom] = useState(14);
 
-  const handleSaveKey = (k: string) => {
-    setCustomKey(k);
-    localStorage.setItem('tecconecta_custom_maps_key', k);
-    setShowKeyInput(false);
+  // Sync default layer with theme changes unless user explicitly switched
+  useEffect(() => {
+    if (activeLayer !== 'satellite') {
+      setActiveLayer(isLight ? 'light' : 'dark');
+    }
+  }, [isLight]);
+
+  // Initialize Leaflet Map
+  useEffect(() => {
+    if (!mapContainerRef.current || mapInstanceRef.current) return;
+
+    const initialLat = centerCoords?.lat || -17.7915;
+    const initialLng = centerCoords?.lng || -50.9234;
+
+    const map = L.map(mapContainerRef.current, {
+      center: [initialLat, initialLng],
+      zoom: 14,
+      zoomControl: false, // We use custom high-tech neon controls
+      attributionControl: false,
+      fadeAnimation: true,
+      zoomAnimation: true
+    });
+
+    // Add initial tile layer
+    const config = TILE_LAYERS[activeLayer];
+    const tileLayer = L.tileLayer(config.url, {
+      attribution: config.attribution,
+      maxZoom: config.maxZoom,
+      subdomains: 'abcd'
+    }).addTo(map);
+
+    tileLayerRef.current = tileLayer;
+
+    // Markers layer group
+    const markersLayer = L.layerGroup().addTo(map);
+    markersLayerRef.current = markersLayer;
+
+    map.on('zoomend', () => {
+      setCurrentZoom(map.getZoom());
+    });
+
+    mapInstanceRef.current = map;
+
+    return () => {
+      map.remove();
+      mapInstanceRef.current = null;
+    };
+  }, []);
+
+  // Update tile layer when activeLayer changes
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    if (tileLayerRef.current) {
+      map.removeLayer(tileLayerRef.current);
+    }
+
+    const config = TILE_LAYERS[activeLayer];
+    const newTileLayer = L.tileLayer(config.url, {
+      attribution: config.attribution,
+      maxZoom: config.maxZoom,
+      subdomains: 'abcd'
+    }).addTo(map);
+
+    tileLayerRef.current = newTileLayer;
+  }, [activeLayer]);
+
+  // Update User GPS Marker
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    if (userMarkerRef.current) {
+      map.removeLayer(userMarkerRef.current);
+      userMarkerRef.current = null;
+    }
+
+    if (userCoords && userCoords.lat && userCoords.lng) {
+      const userIcon = L.divIcon({
+        className: 'user-location-marker',
+        html: `
+          <div style="position: relative; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;">
+            <div style="position: absolute; inset: 0; border-radius: 50%; background: rgba(0, 229, 255, 0.4); animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+            <div style="width: 14px; height: 14px; border-radius: 50%; background: #00E5FF; border: 2.5px solid #FFFFFF; box-shadow: 0 0 12px #00E5FF;"></div>
+          </div>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+      });
+
+      const userMarker = L.marker([userCoords.lat, userCoords.lng], { icon: userIcon, zIndexOffset: 1000 })
+        .addTo(map)
+        .bindPopup(`
+          <div style="font-family: sans-serif; padding: 4px 6px; text-align: center;">
+            <strong style="color: #00E5FF; font-size: 12px; display: block;">📍 Sua Localização</strong>
+            <span style="font-size: 11px; color: #888;">GPS ativo com precisão</span>
+          </div>
+        `);
+
+      userMarkerRef.current = userMarker;
+    }
+  }, [userCoords]);
+
+  // Update Provider Markers
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const markersLayer = markersLayerRef.current;
+    if (!map || !markersLayer) return;
+
+    markersLayer.clearLayers();
+
+    providers.forEach((provider) => {
+      const isSelected = selectedProvider?.id === provider.id;
+      const photoUrl = getProviderPhoto(provider.imageUrl, provider.category, provider.name);
+      
+      const pinColor = isSelected ? '#00E5FF' : '#FF6B00';
+      const glowEffect = isSelected ? 'box-shadow: 0 0 18px #00E5FF, 0 0 30px rgba(0,229,255,0.6); transform: scale(1.15);' : 'box-shadow: 0 4px 12px rgba(0,0,0,0.5);';
+      const borderStyle = isSelected ? 'border: 2px solid #FFFFFF;' : 'border: 1.5px solid rgba(255,255,255,0.8);';
+
+      const customIcon = L.divIcon({
+        className: `custom-provider-marker-${provider.id}`,
+        html: `
+          <div style="position: relative; width: 38px; height: 46px; cursor: pointer; display: flex; flex-direction: column; align-items: center; transition: transform 0.2s ease;">
+            <div style="width: 36px; height: 36px; border-radius: 50%; background: ${pinColor}; ${borderStyle} ${glowEffect} overflow: hidden; display: flex; align-items: center; justify-content: center; z-index: 2;">
+              <img src="${photoUrl}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'" />
+            </div>
+            <div style="width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid ${pinColor}; margin-top: -2px; z-index: 1;"></div>
+          </div>
+        `,
+        iconSize: [38, 46],
+        iconAnchor: [19, 46],
+        popupAnchor: [0, -46]
+      });
+
+      const marker = L.marker([provider.lat, provider.lng], { icon: customIcon });
+
+      // Build WhatsApp message
+      const whatsappMsg = `Olá ${provider.name}, vi seu anúncio no TecConecta (TecSoluções) e gostaria de solicitar um orçamento!`;
+      const whatsappUrl = buildWhatsAppUrl(provider.whatsapp, whatsappMsg);
+      const googleMapsRouteUrl = `https://www.google.com/maps/dir/?api=1&destination=${provider.lat},${provider.lng}`;
+
+      const popupHtml = `
+        <div style="min-width: 230px; max-width: 270px; font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; padding: 2px;">
+          <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+            <img src="${photoUrl}" style="width: 44px; height: 44px; border-radius: 8px; object-fit: cover; border: 1px solid #e2e8f0;" />
+            <div style="flex: 1; min-width: 0;">
+              <span style="font-size: 9.5px; font-weight: 700; text-transform: uppercase; background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 2px;">
+                ${provider.category}
+              </span>
+              <h4 style="font-size: 13px; font-weight: 800; color: #0f172a; margin: 0; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                ${provider.name}
+              </h4>
+              <div style="font-size: 11px; color: #f59e0b; font-weight: 700; margin-top: 2px;">
+                ★ ${provider.rating ? provider.rating.toFixed(1) : '5.0'} (${provider.reviewsCount || 1} avaliações)
+              </div>
+            </div>
+          </div>
+
+          <div style="font-size: 11px; color: #64748b; line-height: 1.3; margin-bottom: 10px; background: #f8fafc; padding: 6px; border-radius: 6px;">
+            📍 ${provider.neighborhood ? `${provider.neighborhood}, ` : ''}${provider.city}
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <a 
+              href="${whatsappUrl}" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              id="map-popup-wa-${provider.id}"
+              style="display: flex; align-items: center; justify-content: center; gap: 6px; background: #25D366; color: #ffffff; text-decoration: none; font-size: 12px; font-weight: 700; padding: 7px 10px; border-radius: 8px; box-shadow: 0 2px 6px rgba(37,211,102,0.3);"
+            >
+              <span>💬 Chamar no WhatsApp</span>
+            </a>
+
+            <a 
+              href="${googleMapsRouteUrl}" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              style="display: flex; align-items: center; justify-content: center; gap: 4px; background: #f1f5f9; color: #334155; text-decoration: none; font-size: 11px; font-weight: 600; padding: 5px 8px; border-radius: 6px;"
+            >
+              <span>🧭 Abrir Rota GPS</span>
+            </a>
+          </div>
+        </div>
+      `;
+
+      marker.bindPopup(popupHtml, {
+        className: 'tecconecta-custom-popup',
+        closeButton: true,
+        autoPan: true
+      });
+
+      marker.on('click', () => {
+        onSelectProvider(provider);
+      });
+
+      marker.on('popupopen', () => {
+        // Track clicks when user presses the popup's WhatsApp link
+        const btn = document.getElementById(`map-popup-wa-${provider.id}`);
+        if (btn) {
+          btn.onclick = () => {
+            recordProviderClick(provider.id);
+          };
+        }
+      });
+
+      if (isSelected) {
+        marker.openPopup();
+      }
+
+      markersLayer.addLayer(marker);
+    });
+  }, [providers, selectedProvider]);
+
+  // Center or Pan to Selected Provider
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    if (selectedProvider && selectedProvider.lat && selectedProvider.lng) {
+      map.flyTo([selectedProvider.lat, selectedProvider.lng], 16, {
+        duration: 1.2
+      });
+    } else if (centerCoords && centerCoords.lat && centerCoords.lng) {
+      map.panTo([centerCoords.lat, centerCoords.lng]);
+    }
+  }, [selectedProvider, centerCoords]);
+
+  // Fit all providers in view
+  const handleFitAllBounds = () => {
+    const map = mapInstanceRef.current;
+    if (!map || providers.length === 0) return;
+
+    const bounds = L.latLngBounds(providers.map((p) => [p.lat, p.lng]));
+    if (userCoords) {
+      bounds.extend([userCoords.lat, userCoords.lng]);
+    }
+    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
   };
 
-  // Pre-calculate bounds / center
-  const mapCenter = useMemo(() => {
-    if (selectedProvider) {
-      return { lat: selectedProvider.lat, lng: selectedProvider.lng };
+  // Center on User GPS
+  const handleLocateUser = () => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    if (userCoords && userCoords.lat && userCoords.lng) {
+      map.flyTo([userCoords.lat, userCoords.lng], 15, { duration: 1 });
+      if (userMarkerRef.current) {
+        userMarkerRef.current.openPopup();
+      }
+    } else if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          map.flyTo([pos.coords.latitude, pos.coords.longitude], 15, { duration: 1 });
+        },
+        () => {
+          alert('Localização desativada ou não autorizada no navegador.');
+        }
+      );
     }
-    if (userCoords) {
-      return { lat: userCoords.lat, lng: userCoords.lng };
-    }
-    return centerCoords;
-  }, [selectedProvider, userCoords, centerCoords]);
-
-  // When an effective Google Maps API Key is present, render the official Google Maps JS API via @vis.gl/react-google-maps
-  if (effectiveKey) {
-    return (
-      <div className="relative w-full h-full min-h-[450px] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#080E21]">
-        {/* Top Info Badge */}
-        <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-[#0B132B]/90 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-[#00E5FF]/30 text-xs text-white shadow-lg">
-          <span className="w-2 h-2 rounded-full bg-[#00E5FF] animate-ping" />
-          <span className="font-semibold">Google Maps Interativo</span>
-          <span className="text-gray-400">({providers.length} locais)</span>
-        </div>
-
-        {/* Change Key Option */}
-        <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-          {selectedProvider && (
-            <button
-              onClick={() => setStreetViewCoords({ lat: selectedProvider.lat, lng: selectedProvider.lng })}
-              className="flex items-center gap-1.5 bg-[#00E5FF] text-[#0B132B] font-bold px-3 py-1.5 rounded-xl border border-white/20 text-xs hover:brightness-110 transition shadow-lg"
-              title="Abrir Visão da Rua (Street View) no local selecionado"
-            >
-              <Eye className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Visão da Rua (Street View)</span>
-              <span className="sm:hidden">Street View</span>
-            </button>
-          )}
-          <button
-            onClick={() => setShowKeyInput(!showKeyInput)}
-            className="flex items-center gap-1.5 bg-[#0B132B]/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/15 text-[11px] font-semibold text-gray-300 hover:text-white hover:border-[#00E5FF]/40 transition shadow-lg"
-          >
-            <Key className="w-3.5 h-3.5 text-[#00E5FF]" />
-            <span>Configurar Chave</span>
-          </button>
-        </div>
-
-        {showKeyInput && (
-          <div className="absolute top-14 right-4 z-20 w-80 p-4 rounded-xl bg-[#0B132B] border border-[#00E5FF]/40 shadow-2xl text-xs space-y-2">
-            <span className="font-bold text-white block">Chave Google Maps API</span>
-            <input
-              type="text"
-              placeholder="Cole sua chave aqui..."
-              value={customKey}
-              onChange={(e) => setCustomKey(e.target.value)}
-              className="w-full bg-white/5 border border-white/20 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-[#00E5FF]"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleSaveKey(customKey)}
-                className="flex-1 bg-[#00E5FF] text-[#0B132B] font-bold py-1.5 rounded-lg"
-              >
-                Salvar
-              </button>
-              <button
-                onClick={() => setShowKeyInput(false)}
-                className="bg-white/10 text-gray-300 px-3 py-1.5 rounded-lg"
-              >
-                Fechar
-              </button>
-            </div>
-          </div>
-        )}
-
-        <APIProvider apiKey={effectiveKey} libraries={['places', 'marker', 'geometry']} language="pt-BR" region="BR">
-          <Map
-            style={{ width: '100%', height: '100%' }}
-            defaultCenter={mapCenter}
-            defaultZoom={13}
-            mapId="DEMO_MAP_ID"
-            gestureHandling="greedy"
-            disableDefaultUI={false}
-            streetViewControl={true}
-            mapTypeControl={true}
-            fullscreenControl={true}
-            zoomControl={true}
-            internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
-          >
-            <MapRecenterController center={mapCenter} selectedProvider={selectedProvider} />
-            <StreetViewManager
-              activeStreetViewCoords={streetViewCoords}
-              onCloseStreetView={() => setStreetViewCoords(null)}
-            />
-
-            {/* User GPS location marker */}
-            {userCoords && (
-              <AdvancedMarker position={userCoords} title="Minha Localização">
-                <div className="relative flex items-center justify-center">
-                  <div className="w-6 h-6 rounded-full bg-[#00E5FF]/30 animate-ping absolute" />
-                  <div className="w-4 h-4 rounded-full bg-[#00E5FF] border-2 border-white shadow-[0_0_10px_#00E5FF]" />
-                </div>
-              </AdvancedMarker>
-            )}
-
-            {/* Provider Markers */}
-            {providers.map((p) => {
-              const isSelected = selectedProvider?.id === p.id;
-              return (
-                <AdvancedMarker
-                  key={p.id}
-                  position={{ lat: p.lat, lng: p.lng }}
-                  onClick={() => onSelectProvider(p)}
-                  title={p.name}
-                >
-                  <Pin
-                    background={isSelected ? '#00E5FF' : '#FF6B00'}
-                    borderColor={isSelected ? '#FFFFFF' : '#0B132B'}
-                    glyphColor="#0B132B"
-                    scale={isSelected ? 1.3 : 1.0}
-                  />
-                </AdvancedMarker>
-              );
-            })}
-
-            {/* InfoWindow for Selected Provider */}
-            {selectedProvider && (
-              <InfoWindow
-                position={{ lat: selectedProvider.lat, lng: selectedProvider.lng }}
-                onCloseClick={() => onSelectProvider(null)}
-              >
-                <div className="p-2 max-w-xs text-gray-900 font-['Plus_Jakarta_Sans']">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">
-                      {selectedProvider.category}
-                    </span>
-                    {onOpenReview ? (
-                      <button
-                        type="button"
-                        onClick={() => onOpenReview(selectedProvider)}
-                        className="text-[10px] font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded flex items-center gap-0.5 ml-auto transition"
-                        title="Ver avaliações ou avaliar serviço"
-                      >
-                        <Star className="w-3 h-3 fill-amber-400" />
-                        <span>{selectedProvider.rating ? selectedProvider.rating.toFixed(1) : '5.0'}</span>
-                        <span className="text-[9px] text-gray-500">★ Avaliar</span>
-                      </button>
-                    ) : (
-                      <span className="text-[10px] font-semibold text-amber-600 flex items-center gap-0.5 ml-auto">
-                        <Star className="w-3 h-3 fill-amber-400" />
-                        {selectedProvider.rating ? selectedProvider.rating.toFixed(1) : '5.0'}
-                      </span>
-                    )}
-                  </div>
-                  <h4 className="font-bold text-sm text-gray-900 line-clamp-1">
-                    {selectedProvider.name}
-                  </h4>
-                  <p className="text-xs text-gray-600 mt-0.5 flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-red-500 shrink-0" />
-                    <span className="truncate">
-                      {selectedProvider.address || selectedProvider.neighborhood || selectedProvider.city}
-                      {selectedProvider.cep ? ` • CEP: ${selectedProvider.cep}` : ''}
-                    </span>
-                  </p>
-                  {selectedProvider.description && (
-                    <p className="text-[11px] text-gray-500 mt-1 line-clamp-2">
-                      {selectedProvider.description}
-                    </p>
-                  )}
-
-                  {/* Actions & Street View Controls */}
-                  <div className="mt-2.5 pt-2 border-t border-gray-200 flex flex-col gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setStreetViewCoords({ lat: selectedProvider.lat, lng: selectedProvider.lng })}
-                      className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-[#0B132B] hover:bg-[#080E21] text-[#00E5FF] text-xs font-bold transition shadow-sm border border-[#00E5FF]/30"
-                      title="Explorar rua e fachada com Street View em 360°"
-                    >
-                      <Eye className="w-3.5 h-3.5 text-[#00E5FF]" />
-                      <span>Visão da Rua (Street View 360°)</span>
-                    </button>
-
-                    <a
-                      href={buildWhatsAppUrl(
-                        selectedProvider.whatsapp,
-                        `Olá ${selectedProvider.name}, vi seu anúncio no TecConecta (DaMaceno Soluções) e gostaria de informações sobre ${selectedProvider.category}!`
-                      )}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-[#25D366] text-white text-xs font-bold hover:bg-[#1EBE5D] transition shadow-sm"
-                    >
-                      <MessageCircle className="w-3.5 h-3.5 fill-white" />
-                      <span>Conversar no WhatsApp</span>
-                    </a>
-
-                    <a
-                      href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${selectedProvider.lat},${selectedProvider.lng}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[10px] text-blue-600 hover:underline flex items-center justify-center gap-1 pt-0.5"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                      <span>Abrir Street View em tela cheia</span>
-                    </a>
-                  </div>
-                </div>
-              </InfoWindow>
-            )}
-          </Map>
-        </APIProvider>
-      </div>
-    );
-  }
-
-  // Auto-center fallback map when provider is selected
-  useEffect(() => {
-    if (selectedProvider) {
-      setMapPan({ x: 0, y: 0 });
-    }
-  }, [selectedProvider?.id]);
-
-  // Graceful interactive local map viewer when VITE_GOOGLE_MAPS_API_KEY is not yet supplied
-  // Converts lat/lng coordinates to visual canvas space around centerCoords
-  const scale = 450 * Math.pow(1.3, zoomLevel - 13);
-  const centerX = 400 + mapPan.x;
-  const centerY = 300 + mapPan.y;
+  };
 
   return (
-    <div
-      id="interactive-map-container"
-      className="relative w-full h-full min-h-[500px] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#070D1E] select-none flex flex-col"
-    >
-      {/* Top Banner: Notice & Google Maps Key Assistant */}
-      <div className="absolute top-4 left-4 right-4 z-20 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
-        <div className="flex items-center gap-2 bg-[#0B132B]/90 backdrop-blur-md px-3.5 py-2 rounded-xl border border-[#00E5FF]/30 text-xs text-white shadow-xl pointer-events-auto">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#00E5FF] animate-pulse" />
-          <span className="font-bold font-['Outfit']">Mapa Interativo TecConecta</span>
-          <span className="text-gray-400">({providers.length} profissionais geolocalizados)</span>
+    <div className="relative w-full h-full min-h-[500px] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#080E21]">
+      {/* Actual Leaflet Container */}
+      <div 
+        ref={mapContainerRef} 
+        className="w-full h-full z-0 cursor-grab active:cursor-grabbing" 
+        style={{ minHeight: '520px' }}
+      />
+
+      {/* Top Left: Providers Count Badge & Status */}
+      <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0B132B]/90 border border-white/10 backdrop-blur-md text-xs font-semibold text-white shadow-lg">
+          <span className="w-2 h-2 rounded-full bg-[#00E5FF] animate-pulse" />
+          <span>{providers.length} Prestadores no Mapa</span>
         </div>
 
-        <button
-          onClick={() => setShowKeyInput(!showKeyInput)}
-          className="flex items-center gap-1.5 bg-[#0B132B]/90 backdrop-blur-md px-3 py-2 rounded-xl border border-white/20 text-xs font-semibold text-gray-200 hover:text-[#00E5FF] hover:border-[#00E5FF]/40 transition shadow-xl pointer-events-auto"
-        >
-          <Key className="w-3.5 h-3.5 text-[#00E5FF]" />
-          <span>Ativar Google Maps Oficial</span>
-        </button>
-      </div>
-
-      {/* Google Maps Key Setup Modal Popover */}
-      {showKeyInput && (
-        <div className="absolute top-16 right-4 z-30 w-84 p-4 rounded-2xl bg-[#0B132B] border border-[#00E5FF]/40 shadow-2xl text-xs space-y-3">
-          <div className="flex items-center justify-between">
-            <h4 className="font-bold text-white flex items-center gap-1.5">
-              <Key className="w-4 h-4 text-[#00E5FF]" />
-              Conectar Google Maps API
-            </h4>
-            <button onClick={() => setShowKeyInput(false)} className="text-gray-400 hover:text-white">
-              ✕
-            </button>
-          </div>
-          <p className="text-gray-300 leading-relaxed text-[11px]">
-            Para exibir as imagens de satélite e ruas oficiais do Google Maps, insira sua chave do Google Maps Platform ou use o <strong>Maps Demo Key</strong> gratuito:
-          </p>
-          <input
-            type="text"
-            placeholder="Cole sua API Key aqui..."
-            value={customKey}
-            onChange={(e) => setCustomKey(e.target.value)}
-            className="w-full bg-white/5 border border-white/20 rounded-xl p-2.5 text-white text-xs focus:outline-none focus:border-[#00E5FF]"
-          />
-          <div className="flex items-center justify-between gap-2 pt-1">
-            <a
-              href="https://mapsplatform.google.com/maps-demo-key?utm_campaign=gmp_mcp_codeassist_v1_aistudio"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[10px] text-[#00E5FF] hover:underline flex items-center gap-1"
-            >
-              <ExternalLink className="w-3 h-3" />
-              Obter Maps Demo Key (Grátis)
-            </a>
-            <button
-              onClick={() => handleSaveKey(customKey)}
-              className="px-4 py-1.5 rounded-lg bg-[#00E5FF] text-[#0B132B] font-bold text-xs hover:brightness-110 transition"
-            >
-              Salvar Chave
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Interactive Map Visual Stage - Supports Dragging on Desktop & Touch Panning in all directions on Mobile */}
-      <div
-        className="relative flex-1 w-full h-full overflow-hidden cursor-grab active:cursor-grabbing"
-        style={{ touchAction: 'none' }}
-        onMouseDown={(e) => {
-          setIsDragging(true);
-          setDragStart({ x: e.clientX - mapPan.x, y: e.clientY - mapPan.y });
-        }}
-        onMouseMove={(e) => {
-          if (!isDragging) return;
-          setMapPan({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
-        }}
-        onMouseUp={() => setIsDragging(false)}
-        onMouseLeave={() => setIsDragging(false)}
-        onTouchStart={(e) => {
-          if (e.touches.length === 1) {
-            setIsDragging(true);
-            setDragStart({ x: e.touches[0].clientX - mapPan.x, y: e.touches[0].clientY - mapPan.y });
-          }
-        }}
-        onTouchMove={(e) => {
-          if (!isDragging || e.touches.length !== 1) return;
-          setMapPan({ x: e.touches[0].clientX - dragStart.x, y: e.touches[0].clientY - dragStart.y });
-        }}
-        onTouchEnd={() => setIsDragging(false)}
-      >
-        {/* Background Technological Grid & Radar Rings */}
-        <div className="absolute inset-0 bg-[#070D1E] overflow-hidden">
-          {/* Subtle street / circuit grid */}
-          <div
-            className="absolute inset-0 opacity-20"
-            style={{
-              backgroundImage: `linear-gradient(#00E5FF 1px, transparent 1px), linear-gradient(to right, #00E5FF 1px, transparent 1px)`,
-              backgroundSize: `${35 * Math.pow(1.2, zoomLevel - 13)}px ${35 * Math.pow(1.2, zoomLevel - 13)}px`,
-              backgroundPosition: `${centerX}px ${centerY}px`,
-            }}
-          />
-
-          {/* Central Radial Beacon Rings */}
-          <div
-            className="absolute pointer-events-none rounded-full border border-[#00E5FF]/20"
-            style={{
-              width: `${scale * 0.5}px`,
-              height: `${scale * 0.5}px`,
-              left: `${centerX - (scale * 0.25)}px`,
-              top: `${centerY - (scale * 0.25)}px`,
-            }}
-          />
-          <div
-            className="absolute pointer-events-none rounded-full border border-[#FF6B00]/15"
-            style={{
-              width: `${scale * 0.9}px`,
-              height: `${scale * 0.9}px`,
-              left: `${centerX - (scale * 0.45)}px`,
-              top: `${centerY - (scale * 0.45)}px`,
-            }}
-          />
-        </div>
-
-        {/* User Location Radar Dot */}
-        {userCoords && (
-          <div
-            className="absolute z-20 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-            style={{
-              left: `${centerX + (userCoords.lng - mapCenter.lng) * scale * 1.5}px`,
-              top: `${centerY - (userCoords.lat - mapCenter.lat) * scale * 1.5}px`,
-            }}
-          >
-            <div className="relative flex items-center justify-center">
-              <div className="w-10 h-10 rounded-full bg-[#00E5FF]/25 animate-ping absolute" />
-              <div className="w-4 h-4 rounded-full bg-[#00E5FF] border-2 border-white shadow-[0_0_15px_#00E5FF]" />
-            </div>
-            <span className="absolute top-5 left-1/2 -translate-x-1/2 text-[10px] font-bold text-white bg-black/60 px-2 py-0.5 rounded backdrop-blur-sm whitespace-nowrap">
-              Você está aqui
-            </span>
-          </div>
-        )}
-
-        {/* Interactive Provider Pins */}
-        {providers.map((p) => {
-          const isSelected = selectedProvider?.id === p.id;
-          const px = centerX + (p.lng - mapCenter.lng) * scale * 1.5;
-          const py = centerY - (p.lat - mapCenter.lat) * scale * 1.5;
-
-          return (
-            <div
-              key={p.id}
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectProvider(p);
-              }}
-              className={`absolute z-10 -translate-x-1/2 -translate-y-full cursor-pointer transition-transform duration-200 ${
-                isSelected ? 'scale-125 z-30' : 'hover:scale-115'
-              }`}
-              style={{ left: `${px}px`, top: `${py}px` }}
-            >
-              {/* Category Pin Badge */}
-              <div
-                className={`relative flex flex-col items-center group`}
-              >
-                <div
-                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full shadow-xl transition-all border ${
-                    isSelected
-                      ? 'bg-[#00E5FF] text-[#0B132B] font-extrabold border-white shadow-[0_0_20px_#00E5FF]'
-                      : 'bg-[#0B132B] text-white font-semibold border-[#00E5FF]/50 hover:border-[#FF6B00]'
-                  }`}
-                >
-                  <MapPin className={`w-3.5 h-3.5 ${isSelected ? 'text-[#0B132B]' : 'text-[#FF6B00]'}`} />
-                  <span className="text-[11px] whitespace-nowrap max-w-[110px] truncate">{p.name.split(' ')[0]}</span>
-                </div>
-
-                {/* Arrow Pointer */}
-                <div
-                  className={`w-2 h-2 rotate-45 -mt-1 ${
-                    isSelected ? 'bg-[#00E5FF]' : 'bg-[#0B132B] border-r border-b border-[#00E5FF]/50'
-                  }`}
-                />
-              </div>
-            </div>
-          );
-        })}
-
-        {/* Info Box for Selected Provider in Fallback View */}
         {selectedProvider && (
-          <div
-            className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 w-full max-w-sm px-4 pointer-events-auto"
-            onClick={(e) => e.stopPropagation()}
+          <button
+            onClick={() => onSelectProvider(null)}
+            className="px-2.5 py-1 rounded-xl bg-[#00E5FF]/20 border border-[#00E5FF]/40 text-[#00E5FF] text-[11px] font-bold hover:bg-[#00E5FF]/30 transition backdrop-blur-md"
           >
-            <div className="rounded-2xl bg-[#0B132B]/95 border border-[#00E5FF]/50 shadow-[0_0_40px_rgba(0,229,255,0.25)] p-4 text-white backdrop-blur-md">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  <div className="w-12 h-12 rounded-xl overflow-hidden border border-[#00E5FF]/40 shrink-0 bg-black/40">
-                    <img
-                      src={getProviderPhoto(selectedProvider.imageUrl, selectedProvider.category, selectedProvider.name)}
-                      alt={selectedProvider.name}
-                      className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/40">
-                        {selectedProvider.category}
-                      </span>
-                      <span className="text-xs font-bold text-amber-400 flex items-center gap-0.5">
-                        <Star className="w-3.5 h-3.5 fill-amber-400" />
-                        <span>{selectedProvider.rating ? selectedProvider.rating.toFixed(1) : '5.0'}</span>
-                      </span>
-                    </div>
-                    <h4 className="font-['Outfit'] font-bold text-base text-white mt-1">
-                      {selectedProvider.name}
-                    </h4>
-                    <p className="text-xs text-gray-300 flex items-center gap-1 mt-0.5">
-                      <MapPin className="w-3 h-3 text-[#FF6B00] shrink-0" />
-                      <span>
-                        {selectedProvider.neighborhood ? `${selectedProvider.neighborhood}, ` : ''}
-                        {selectedProvider.city}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => onSelectProvider(null)}
-                  className="text-gray-400 hover:text-white p-1"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {selectedProvider.description && (
-                <p className="text-xs text-gray-300 mt-2 line-clamp-2 bg-white/5 p-2 rounded-lg border border-white/5">
-                  {selectedProvider.description}
-                </p>
-              )}
-
-              {/* Action Buttons */}
-              <div className="mt-3 pt-2.5 border-t border-white/10 flex flex-col gap-2">
-                <a
-                  href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${selectedProvider.lat},${selectedProvider.lng}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#00E5FF]/10 border border-[#00E5FF]/40 px-4 py-2 text-xs font-bold text-[#00E5FF] hover:bg-[#00E5FF]/20 transition"
-                  title="Abrir a visão da rua oficial em 360 graus"
-                >
-                  <Eye className="w-3.5 h-3.5 text-[#00E5FF]" />
-                  <span>Visão da Rua (Street View Oficial)</span>
-                  <ExternalLink className="w-3 h-3 text-[#00E5FF]/70 ml-0.5" />
-                </a>
-
-                <div className="flex items-center gap-2">
-                  <a
-                    href={buildWhatsAppUrl(
-                      selectedProvider.whatsapp,
-                      `Olá ${selectedProvider.name}, vi seu anúncio no TecConecta (DaMaceno Soluções) e gostaria de solicitar um orçamento para ${selectedProvider.category}!`
-                    )}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#25D366] to-[#128C7E] px-4 py-2.5 text-xs font-bold text-white shadow-lg hover:brightness-110 active:scale-[0.98] transition"
-                  >
-                    <MessageCircle className="w-4 h-4 fill-white" />
-                    <span>Conversar no WhatsApp</span>
-                  </a>
-                  {onOpenReview && (
-                    <button
-                      type="button"
-                      onClick={() => onOpenReview(selectedProvider)}
-                      className="px-3 py-2.5 rounded-xl border border-amber-400/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition"
-                      title="Avaliar este prestador"
-                    >
-                      <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                      <span>Avaliar</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+            Limpar Seleção
+          </button>
         )}
       </div>
 
-      {/* Map Controls (Zoom & Reset) */}
-      <div className="absolute bottom-4 right-4 z-20 flex flex-col gap-1.5">
+      {/* Top Right: Layer Switcher Button */}
+      <div className="absolute top-3 right-3 z-10">
+        <div className="relative">
+          <button
+            id="btn-map-layer-switcher"
+            onClick={() => setShowLayerMenu(!showLayerMenu)}
+            className="p-2 rounded-xl bg-[#0B132B]/90 border border-white/10 text-gray-200 hover:text-[#00E5FF] hover:border-[#00E5FF]/40 transition backdrop-blur-md shadow-lg"
+            title="Alterar Estilo do Mapa"
+          >
+            <Layers className="w-4 h-4" />
+          </button>
+
+          {showLayerMenu && (
+            <div className="absolute right-0 mt-2 w-44 rounded-xl bg-[#0B132B] border border-[#00E5FF]/30 shadow-2xl p-2 z-20 space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-2 block py-1">
+                Visualização
+              </span>
+              <button
+                onClick={() => {
+                  setActiveLayer('dark');
+                  setShowLayerMenu(false);
+                }}
+                className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center justify-between ${
+                  activeLayer === 'dark' ? 'bg-[#00E5FF]/20 text-[#00E5FF]' : 'text-gray-300 hover:bg-white/5'
+                }`}
+              >
+                <span>Neon Noturno (Dark)</span>
+                {activeLayer === 'dark' && <span className="w-1.5 h-1.5 rounded-full bg-[#00E5FF]" />}
+              </button>
+              <button
+                onClick={() => {
+                  setActiveLayer('light');
+                  setShowLayerMenu(false);
+                }}
+                className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center justify-between ${
+                  activeLayer === 'light' ? 'bg-[#00E5FF]/20 text-[#00E5FF]' : 'text-gray-300 hover:bg-white/5'
+                }`}
+              >
+                <span>Mapa Claro (Positron)</span>
+                {activeLayer === 'light' && <span className="w-1.5 h-1.5 rounded-full bg-[#00E5FF]" />}
+              </button>
+              <button
+                onClick={() => {
+                  setActiveLayer('satellite');
+                  setShowLayerMenu(false);
+                }}
+                className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center justify-between ${
+                  activeLayer === 'satellite' ? 'bg-[#00E5FF]/20 text-[#00E5FF]' : 'text-gray-300 hover:bg-white/5'
+                }`}
+              >
+                <span>Satélite Real</span>
+                {activeLayer === 'satellite' && <span className="w-1.5 h-1.5 rounded-full bg-[#00E5FF]" />}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Bottom Right: Quick Navigation & Zoom Controls */}
+      <div className="absolute bottom-4 right-3 z-10 flex flex-col gap-2">
+        {/* Locate User GPS */}
         <button
-          onClick={() => setZoomLevel((z) => Math.min(z + 1, 18))}
-          className="w-8 h-8 rounded-lg bg-[#0B132B]/90 border border-white/15 text-white flex items-center justify-center hover:border-[#00E5FF] transition shadow-lg"
-          title="Aumentar Zoom"
+          id="btn-map-locate-gps"
+          onClick={handleLocateUser}
+          className="p-2.5 rounded-xl bg-[#0B132B]/90 border border-white/10 text-gray-200 hover:text-[#00E5FF] hover:border-[#00E5FF]/40 transition backdrop-blur-md shadow-lg"
+          title="Minha Localização GPS"
         >
-          <Plus className="w-4 h-4" />
+          <LocateFixed className="w-4 h-4 text-[#00E5FF]" />
         </button>
+
+        {/* Fit All Bounds */}
         <button
-          onClick={() => setZoomLevel((z) => Math.max(z - 1, 9))}
-          className="w-8 h-8 rounded-lg bg-[#0B132B]/90 border border-white/15 text-white flex items-center justify-center hover:border-[#00E5FF] transition shadow-lg"
-          title="Diminuir Zoom"
+          id="btn-map-fit-bounds"
+          onClick={handleFitAllBounds}
+          className="p-2.5 rounded-xl bg-[#0B132B]/90 border border-white/10 text-gray-200 hover:text-[#00E5FF] hover:border-[#00E5FF]/40 transition backdrop-blur-md shadow-lg"
+          title="Enquadrar Todos os Prestadores"
         >
-          <Minus className="w-4 h-4" />
+          <Compass className="w-4 h-4" />
         </button>
-        <button
-          onClick={() => {
-            setMapPan({ x: 0, y: 0 });
-            setZoomLevel(13);
-          }}
-          className="w-8 h-8 rounded-lg bg-[#0B132B]/90 border border-white/15 text-white flex items-center justify-center hover:border-[#00E5FF] transition shadow-lg"
-          title="Centralizar"
-        >
-          <Compass className="w-4 h-4 text-[#00E5FF]" />
-        </button>
+
+        {/* Zoom In & Out */}
+        <div className="flex flex-col rounded-xl overflow-hidden border border-white/10 bg-[#0B132B]/90 backdrop-blur-md shadow-lg">
+          <button
+            onClick={() => mapInstanceRef.current?.zoomIn()}
+            className="p-2 text-gray-200 hover:text-[#00E5FF] hover:bg-white/5 border-b border-white/10 transition"
+            title="Aumentar Zoom"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => mapInstanceRef.current?.zoomOut()}
+            className="p-2 text-gray-200 hover:text-[#00E5FF] hover:bg-white/5 transition"
+            title="Diminuir Zoom"
+          >
+            <Minus className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Bottom Left: Guarantee Notice of Zero API Keys / Zero Interruption */}
+      <div className="absolute bottom-3 left-3 z-10 hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-[#0B132B]/85 border border-[#00E5FF]/20 text-[10px] text-gray-300 backdrop-blur-md">
+        <ShieldCheck className="w-3 h-3 text-[#00E5FF]" />
+        <span>Mapa Autônomo TecSoluções • 100% Funcional sem falhas de API</span>
       </div>
     </div>
   );

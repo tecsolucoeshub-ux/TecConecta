@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, MapPin, Navigation, Sparkles, Filter, CheckCircle2, MessageCircle, AlertCircle, RefreshCw, Compass, Building2, Trash2 } from 'lucide-react';
 import { Provider, ViewMode, SponsoredBanner, AdminSettings } from './types';
-import { fetchProviders, clearDemoProviders, resetDemoProviders, fetchSponsoredBanners, fetchAdminSettings, DEFAULT_ADMIN_SETTINGS } from './services/firebase';
+import { fetchProviders, clearDemoProviders, resetDemoProviders, fetchSponsoredBanners, fetchAdminSettings, DEFAULT_ADMIN_SETTINGS, recordProviderClick } from './services/firebase';
 import { POPULAR_CITIES } from './data/categories';
 import { TecNavbar } from './components/TecNavbar';
 import { TecBrandHero } from './components/TecBrandHero';
@@ -402,9 +402,8 @@ export default function App() {
         </div>
       )}
 
-      {/* 1. Official Brand Hero Banner (DaMaceno Soluções / TecConecta) */}
+      {/* 1. Official Brand Hero Banner (TecSoluções / TecConecta) */}
       <TecBrandHero
-        onOpenRegister={() => setIsRegisterOpen(true)}
         onExplore={() => {
           const el = document.getElementById('search-controls-section');
           el?.scrollIntoView({ behavior: 'smooth' });
@@ -682,11 +681,14 @@ export default function App() {
                         <a
                           href={buildWhatsAppUrl(
                             p.whatsapp,
-                            `Olá ${p.name}, vi seu anúncio no TecConecta (DaMaceno Soluções)!`
+                            `Olá ${p.name}, vi seu anúncio no TecConecta (TecSoluções)!`
                           )}
                           target="_blank"
                           rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            recordProviderClick(p.id);
+                          }}
                           className="text-[11px] font-bold text-[#25D366] flex items-center gap-1 hover:underline"
                         >
                           <MessageCircle className="w-3 h-3" />
@@ -825,10 +827,9 @@ export default function App() {
       {/* PWA Offline Banner */}
       <OfflineIndicator />
 
-      {/* Official Footer with DaMaceno Soluções branding & legal disclaimers */}
+      {/* Official Footer with TecSoluções branding & legal disclaimers */}
       <Footer
         onOpenPrivacyPolicy={() => setIsPrivacyPolicyOpen(true)}
-        onOpenRegister={() => setIsRegisterOpen(true)}
         onOpenAdmin={() => setIsAdminOpen(true)}
         admWhatsapp={adminSettings.admWhatsapp}
       />

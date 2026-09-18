@@ -421,4 +421,51 @@ export async function deleteSponsoredBanner(id: string): Promise<boolean> {
   return true;
 }
 
+// ----------------------------------------------------
+// CLICK & ENGAGEMENT ANALYTICS TRACKING
+// ----------------------------------------------------
+export async function recordProviderClick(id: string): Promise<number> {
+  const current = getStoredProviders();
+  const target = current.find(p => p.id === id);
+  const newClicks = (target?.clicksCount || 0) + 1;
+  const updatedList = current.map(p => p.id === id ? { ...p, clicksCount: newClicks } : p);
+  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedList));
+
+  if (firestoreDb) {
+    try {
+      const { doc, updateDoc, increment } = await import('firebase/firestore');
+      await updateDoc(doc(firestoreDb, 'providers', id), {
+        clicksCount: increment(1)
+      });
+    } catch (e) {
+      console.warn('Firestore provider click fallback to local store:', e);
+    }
+  }
+
+  window.dispatchEvent(new CustomEvent('tecconecta:provider_clicked', { detail: { id, clicksCount: newClicks } }));
+  return newClicks;
+}
+
+export async function recordBannerClick(id: string): Promise<number> {
+  const current = await fetchSponsoredBanners();
+  const target = current.find(b => b.id === id);
+  const newClicks = (target?.clicksCount || 0) + 1;
+  const updatedList = current.map(b => b.id === id ? { ...b, clicksCount: newClicks } : b);
+  localStorage.setItem(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(updatedList));
+
+  if (firestoreDb) {
+    try {
+      const { doc, updateDoc, increment } = await import('firebase/firestore');
+      await updateDoc(doc(firestoreDb, 'banners', id), {
+        clicksCount: increment(1)
+      });
+    } catch (e) {
+      console.warn('Firestore banner click fallback to local store:', e);
+    }
+  }
+
+  window.dispatchEvent(new CustomEvent('tecconecta:banners_updated', { detail: updatedList }));
+  return newClicks;
+}
+
 

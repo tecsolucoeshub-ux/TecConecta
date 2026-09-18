@@ -4,6 +4,7 @@ import { Provider } from '../types';
 import { useTheme } from '../context/ThemeContext';
 import { getProviderPhoto, generateFallbackBrandImage, CATEGORY_DEFAULT_PHOTOS } from '../utils/imageCompressor';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
+import { recordProviderClick } from '../services/firebase';
 
 interface ProviderCardProps {
   provider: Provider;
@@ -73,7 +74,7 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
     `Olá ADM TecSoluções! Sou responsável pelo perfil de "${provider.name}" (WhatsApp: ${provider.whatsapp}) e gostaria de solicitar uma atualização de dados ou de foto.`
   );
 
-  const defaultMessage = `Olá ${provider.name}, vi seu anúncio no TecConecta (DaMaceno Soluções) e gostaria de solicitar um orçamento de ${provider.category}!`;
+  const defaultMessage = `Olá ${provider.name}, vi seu anúncio no TecConecta (TecSoluções) e gostaria de solicitar um orçamento de ${provider.category}!`;
   const whatsappUrl = buildWhatsAppUrl(provider.whatsapp, defaultMessage);
 
   const distanceKm = userCoords
@@ -213,6 +214,7 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
             <a
               id={`btn-whatsapp-${provider.id}`}
               href={whatsappUrl}
+              onClick={() => recordProviderClick(provider.id)}
               target="_blank"
               rel="noopener noreferrer"
               className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-[#25D366] to-[#128C7E] px-3 py-2 text-xs font-bold text-white shadow-[0_0_12px_rgba(37,211,102,0.25)] hover:brightness-110 active:scale-[0.98] transition"

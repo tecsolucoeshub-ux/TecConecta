@@ -28,7 +28,7 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
               <h2 className="text-lg font-bold text-white font-['Outfit']">
                 Termos de Uso e Política de Privacidade
               </h2>
-              <p className="text-xs text-gray-400">TecConecta • DaMaceno Soluções</p>
+              <p className="text-xs text-gray-400">TecConecta • TecSoluções</p>
             </div>
           </div>
           <button
@@ -47,7 +47,7 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
             <AlertTriangle className="w-6 h-6 text-[#FF6B00] shrink-0 mt-0.5" />
             <div className="text-xs leading-relaxed">
               <strong className="text-white block text-sm mb-1">Aviso Fundamental aos Usuários e Prestadores</strong>
-              O <strong>TecConecta</strong> é uma vitrine e catálogo geolocalizado desenvolvido pela <strong>DaMaceno Soluções</strong> para facilitar a conexão direta entre cidadãos locais e profissionais/lojas. Nós <strong>não cobramos comissões, não processamos pagamentos e não intermediamos contratos</strong>.
+              O <strong>TecConecta</strong> é uma vitrine e catálogo geolocalizado desenvolvido pela <strong>TecSoluções</strong> para facilitar a conexão direta entre cidadãos locais e profissionais/lojas. Nós <strong>não cobramos comissões, não processamos pagamentos e não intermediamos contratos</strong>.
             </div>
           </div>
 
@@ -58,7 +58,7 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
               1. Natureza do Serviço e Zero Intermediação
             </h3>
             <p>
-              O <strong>TecConecta</strong> atua unicamente como uma plataforma tecnológica e catálogo geográfico digital. Todas as conversas, orçamentos, cotações, execuções e pagamentos ocorrem de forma <strong>100% direta entre o cliente e o prestador via WhatsApp</strong> ou contato presencial, sem nenhuma interferência, custódia de fundos ou taxa administrativa por parte da DaMaceno Soluções.
+              O <strong>TecConecta</strong> atua unicamente como uma plataforma tecnológica e catálogo geográfico digital. Todas as conversas, orçamentos, cotações, execuções e pagamentos ocorrem de forma <strong>100% direta entre o cliente e o prestador via WhatsApp</strong> ou contato presencial, sem nenhuma interferência, custódia de fundos ou taxa administrativa por parte da TecSoluções.
             </p>
           </section>
 
@@ -94,7 +94,7 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
               4. Isenção de Garantias sobre Serviços Prestados
             </h3>
             <p>
-              A <strong>DaMaceno Soluções e a equipe do TecConecta isentam-se expressamente de quaisquer garantias</strong> — sejam elas implícitas ou explícitas — quanto à qualidade, segurança, legalidade, pontualidade, acabamento ou conformidade dos serviços ou produtos fornecidos pelos prestadores cadastrados. A plataforma não possui vínculo empregatício, societário ou representação comercial com nenhum dos anunciantes.
+              A <strong>TecSoluções e a equipe do TecConecta isentam-se expressamente de quaisquer garantias</strong> — sejam elas implícitas ou explícitas — quanto à qualidade, segurança, legalidade, pontualidade, acabamento ou conformidade dos serviços ou produtos fornecidos pelos prestadores cadastrados. A plataforma não possui vínculo empregatício, societário ou representação comercial com nenhum dos anunciantes.
             </p>
           </section>
 
@@ -124,7 +124,7 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
         {/* Footer */}
         <div className="border-t border-white/10 px-6 py-4 bg-white/5 flex flex-col sm:flex-row items-center justify-between gap-3">
           <span className="text-xs text-gray-400">
-            TecConecta • Desenvolvido com excelência por <strong>DaMaceno Soluções</strong>
+            TecConecta • Desenvolvido com excelência por <strong>TecSoluções</strong>
           </span>
           <button
             id="btn-understand-privacy-policy"

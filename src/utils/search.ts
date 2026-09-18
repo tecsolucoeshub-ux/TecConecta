@@ -20,7 +20,7 @@ export function normalizeSearchText(text?: string | null): string {
  * Allows visitors to type flexible queries such as:
  * - "eletricista sp"
  * - "solucoes rio verde"
- * - "damaceno"
+ * - "tecsolucoes"
  * - "ia"
  * - "marcos"
  * - "pintor"

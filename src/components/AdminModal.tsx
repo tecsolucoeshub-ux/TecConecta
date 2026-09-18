@@ -78,8 +78,10 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   // Presentation Modal State (Exclusive for Authenticated ADM)
   const [isPresentationOpen, setIsPresentationOpen] = useState(false);
 
-  // Search filter for providers tab
+  // Search and filter for providers tab
   const [providerSearch, setProviderSearch] = useState('');
+  const [businessFilter, setBusinessFilter] = useState<'all' | 'autonomo' | 'mei'>('all');
+  const [sortFilter, setSortFilter] = useState<'recent' | 'clicks'>('recent');
 
   // New Banner Form State
   const [isCreatingBanner, setIsCreatingBanner] = useState(false);
@@ -313,21 +315,40 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     setTimeout(() => setSettingsSuccess(false), 3000);
   };
 
-  // Filter providers in admin view
-  const filteredProviders = providers.filter(p => {
-    if (!providerSearch.trim()) return true;
-    const term = providerSearch.toLowerCase();
-    return (
-      p.name.toLowerCase().includes(term) ||
-      p.category.toLowerCase().includes(term) ||
-      p.city.toLowerCase().includes(term) ||
-      p.whatsapp.includes(term)
-    );
-  });
+  // Statistics & Metrics for ADM
+  const totalProviders = providers.length;
+  const autonomosCount = providers.filter(p => (p.businessType || 'autonomo') === 'autonomo').length;
+  const meisCount = providers.filter(p => p.businessType === 'mei').length;
+  const totalProviderClicks = providers.reduce((acc, p) => acc + (p.clicksCount || 0), 0);
+  const totalBannerClicks = banners.reduce((acc, b) => acc + (b.clicksCount || 0), 0);
+
+  // Filter and sort providers in admin view
+  const filteredProviders = providers
+    .filter(p => {
+      // Business profile filter
+      if (businessFilter === 'autonomo' && p.businessType === 'mei') return false;
+      if (businessFilter === 'mei' && p.businessType !== 'mei') return false;
+
+      if (!providerSearch.trim()) return true;
+      const term = providerSearch.toLowerCase();
+      return (
+        p.name.toLowerCase().includes(term) ||
+        p.category.toLowerCase().includes(term) ||
+        p.city.toLowerCase().includes(term) ||
+        p.whatsapp.includes(term) ||
+        (p.ownerEmail && p.ownerEmail.toLowerCase().includes(term))
+      );
+    })
+    .sort((a, b) => {
+      if (sortFilter === 'clicks') {
+        return (b.clicksCount || 0) - (a.clicksCount || 0);
+      }
+      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+    });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
-      <div className="relative w-full max-w-3xl rounded-2xl bg-gradient-to-b from-[#0F1B3E] to-[#080E21] border border-[#00E5FF]/30 p-5 sm:p-6 shadow-[0_0_60px_rgba(0,229,255,0.15)] my-6 max-h-[90vh] flex flex-col">
+      <div className="relative w-full max-w-4xl rounded-2xl bg-gradient-to-b from-[#0F1B3E] to-[#080E21] border border-[#00E5FF]/30 p-5 sm:p-6 shadow-[0_0_60px_rgba(0,229,255,0.15)] my-6 max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4 shrink-0">
           <div className="flex items-center gap-3">
@@ -336,7 +357,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
             </div>
             <div>
               <h2 className="font-['Outfit'] text-lg sm:text-xl font-bold text-white flex items-center gap-2">
-                Painel ADM • DaMaceno Soluções
+                Painel ADM • TecSoluções
                 <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-[#FF6B00]/20 text-[#FF6B00] border border-[#FF6B00]/40">
                   Acesso Restrito
                 </span>
@@ -546,6 +567,49 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                 <p className="mt-0.5 text-gray-400 leading-tight">
                   O botão público de ADM foi ocultado dos visitantes. Você pode abrir este painel a qualquer momento usando as teclas <kbd className="px-1.5 py-0.5 rounded bg-black/50 text-white font-mono font-bold">Ctrl + Shift + A</kbd> (ou <kbd className="px-1.5 py-0.5 rounded bg-black/50 text-white font-mono font-bold">Alt + A</kbd>), adicionando <code className="text-[#00E5FF]">#admin</code> na URL, ou clicando no ponto <code className="text-white">•</code> junto ao copyright no rodapé.
                 </p>
+              </div>
+            </div>
+
+            {/* KPI Summary Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4 shrink-0">
+              <div className="p-3 rounded-xl bg-white/[0.04] border border-white/10">
+                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold block">
+                  Prestadores Cadastrados
+                </span>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-xl font-extrabold text-white font-['Outfit']">{totalProviders}</span>
+                  <span className="text-[10px] text-[#00E5FF] font-medium">{autonomosCount} autônomos • {meisCount} MEIs</span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-white/[0.04] border border-white/10">
+                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold block">
+                  Cliques no WhatsApp
+                </span>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-xl font-extrabold text-[#25D366] font-['Outfit']">{totalProviderClicks}</span>
+                  <span className="text-[10px] text-gray-400 font-medium">nos prestadores</span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-white/[0.04] border border-white/10">
+                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold block">
+                  Banners Patrocinados
+                </span>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-xl font-extrabold text-[#FF6B00] font-['Outfit']">{banners.length}</span>
+                  <span className="text-[10px] text-gray-400 font-medium">empresas ativas</span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-white/[0.04] border border-white/10">
+                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold block">
+                  Cliques nos Banners
+                </span>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-xl font-extrabold text-[#00E5FF] font-['Outfit']">{totalBannerClicks}</span>
+                  <span className="text-[10px] text-gray-400 font-medium">conversões parceiros</span>
+                </div>
               </div>
             </div>
 
@@ -774,6 +838,9 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${b.active ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}`}>
                                 {b.active ? 'Ativo no App' : 'Pausado'}
                               </span>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-[#25D366] border border-emerald-500/30 flex items-center gap-1">
+                                💬 {b.clicksCount || 0} cliques WhatsApp
+                              </span>
                             </div>
                             <p className="text-[11px] text-gray-300 truncate mt-0.5">{b.headline}</p>
                             <span className="text-[10px] text-gray-400">WhatsApp: {b.whatsapp}</span>
@@ -832,7 +899,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                         Gestão de Negócios Cadastrados ({providers.length})
                       </h3>
                       <p className="text-xs text-gray-400">
-                        Edição restrita ao ADM para prevenir que concorrentes alterem cadastros alheios.
+                        Edição restrita ao ADM • Exclusivo para Autônomos e MEIs
                       </p>
                     </div>
 
@@ -842,15 +909,75 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                         type="text"
                         value={providerSearch}
                         onChange={(e) => setProviderSearch(e.target.value)}
-                        placeholder="Buscar prestador..."
+                        placeholder="Buscar por nome, e-mail ou tel..."
                         className="w-full rounded-xl bg-white/5 border border-white/15 pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#00E5FF]"
                       />
                     </div>
                   </div>
 
+                  {/* Filter & Sorting Controls */}
+                  <div className="flex items-center justify-between gap-2 flex-wrap pt-1 pb-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        onClick={() => setBusinessFilter('all')}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
+                          businessFilter === 'all'
+                            ? 'bg-[#00E5FF] text-[#0B132B]'
+                            : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                        }`}
+                      >
+                        Todos ({totalProviders})
+                      </button>
+                      <button
+                        onClick={() => setBusinessFilter('autonomo')}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
+                          businessFilter === 'autonomo'
+                            ? 'bg-[#00E5FF] text-[#0B132B]'
+                            : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                        }`}
+                      >
+                        🧑‍🔧 Autônomos ({autonomosCount})
+                      </button>
+                      <button
+                        onClick={() => setBusinessFilter('mei')}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
+                          businessFilter === 'mei'
+                            ? 'bg-[#00E5FF] text-[#0B132B]'
+                            : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                        }`}
+                      >
+                        💼 MEIs ({meisCount})
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-gray-400">Ordenar:</span>
+                      <button
+                        onClick={() => setSortFilter('recent')}
+                        className={`px-2 py-1 rounded-md text-[11px] font-semibold transition ${
+                          sortFilter === 'recent'
+                            ? 'bg-white/20 text-white'
+                            : 'bg-white/5 text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        Mais Recentes
+                      </button>
+                      <button
+                        onClick={() => setSortFilter('clicks')}
+                        className={`px-2 py-1 rounded-md text-[11px] font-semibold transition ${
+                          sortFilter === 'clicks'
+                            ? 'bg-emerald-500/20 text-[#25D366] border border-emerald-500/30'
+                            : 'bg-white/5 text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        🔥 Mais Clicados
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
                     {filteredProviders.length === 0 ? (
-                      <p className="text-xs text-gray-400 text-center py-6">Nenhum prestador encontrado com o termo digitado.</p>
+                      <p className="text-xs text-gray-400 text-center py-6">Nenhum prestador encontrado com os filtros atuais.</p>
                     ) : (
                       filteredProviders.map((p) => (
                         <div
@@ -879,11 +1006,27 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                                 <span className="text-[11px] px-2 py-0.5 rounded-md bg-[#00E5FF]/10 text-[#00E5FF] font-semibold border border-[#00E5FF]/30">
                                   {p.category}
                                 </span>
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                                  p.businessType === 'mei'
+                                    ? 'bg-purple-500/15 text-purple-300 border border-purple-500/30'
+                                    : 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
+                                }`}>
+                                  {p.businessType === 'mei' ? '💼 MEI' : '🧑‍🔧 Autônomo'}
+                                </span>
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-[#25D366] border border-emerald-500/30 flex items-center gap-1">
+                                  💬 {p.clicksCount || 0} cliques
+                                </span>
                               </div>
                               <div className="text-[11px] text-gray-400 flex items-center gap-2 mt-1 flex-wrap">
                                 <span>📍 {p.city}{p.cep ? ` (CEP: ${p.cep})` : ''}</span>
                                 <span>•</span>
                                 <span>WhatsApp: {p.whatsapp}</span>
+                                {p.ownerEmail && (
+                                  <>
+                                    <span>•</span>
+                                    <span>✉️ {p.ownerEmail} ({p.ownerAuthMethod || 'google'})</span>
+                                  </>
+                                )}
                               </div>
                               {p.description && (
                                 <p className="text-[11px] text-gray-400 truncate mt-0.5 max-w-md">
