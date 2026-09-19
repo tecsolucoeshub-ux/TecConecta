@@ -50,6 +50,14 @@ export class ErrorBoundary extends React.Component<Props, State> {
               <p className="text-xs text-gray-300 leading-relaxed">
                 Detectamos uma falha pontual no carregamento. O sistema foi protegido contra travamentos e você pode continuar navegando normalmente.
               </p>
+              {this.state.error?.message && (
+                <details className="text-left mt-2 p-2.5 rounded-xl bg-black/40 border border-white/10 text-[11px] text-gray-300">
+                  <summary className="cursor-pointer text-[#00E5FF] font-semibold select-none">
+                    Detalhes Técnicos do Erro
+                  </summary>
+                  <p className="mt-1.5 font-mono text-red-300 break-words">{this.state.error.message}</p>
+                </details>
+              )}
             </div>
 
             <div className="flex flex-col sm:flex-row gap-2 pt-2">

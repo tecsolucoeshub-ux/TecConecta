@@ -67,16 +67,29 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   onEditProvider,
   onAuthChange,
 }) => {
-  // Authentication & Session
+  // Safe admin settings fallback
+  const safeAdminSettings: AdminSettings = adminSettings || {
+    admWhatsapp: '64999317499',
+    admName: 'TecSoluções Administrativo',
+    bannerHeadline: 'Anuncie Sua Empresa Aqui',
+    bannerSubtext: 'Espaço exclusivo para divulgação de empresas locais e parceiros.',
+    adminPin: 'admin123'
+  };
+
+  // Authentication & Session (guarded against iframe storage restrictions)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return sessionStorage.getItem(SESSION_AUTH_KEY) === 'true';
+    try {
+      return typeof window !== 'undefined' && sessionStorage.getItem(SESSION_AUTH_KEY) === 'true';
+    } catch {
+      return false;
+    }
   });
   const [passwordInput, setPasswordInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
   // First-time setup state (when master password is not yet personalized)
-  const isDefaultPassword = !adminSettings.adminPin || adminSettings.adminPin === '' || adminSettings.adminPin === 'admin123';
+  const isDefaultPassword = !safeAdminSettings.adminPin || safeAdminSettings.adminPin === '' || safeAdminSettings.adminPin === 'admin123';
   const [isSetupMode, setIsSetupMode] = useState<boolean>(isDefaultPassword);
   const [setupNewPassword, setSetupNewPassword] = useState('');
   const [setupConfirmPassword, setSetupConfirmPassword] = useState('');
@@ -104,15 +117,17 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [bannerSaving, setBannerSaving] = useState(false);
 
   // Settings form state
-  const [admWhatsapp, setAdmWhatsapp] = useState(adminSettings.admWhatsapp);
-  const [admName, setAdmName] = useState(adminSettings.admName);
-  const [bannerHeadline, setBannerHeadline] = useState(adminSettings.bannerHeadline);
-  const [bannerSubtext, setBannerSubtext] = useState(adminSettings.bannerSubtext);
+  const [admWhatsapp, setAdmWhatsapp] = useState(safeAdminSettings.admWhatsapp || '64999317499');
+  const [admName, setAdmName] = useState(safeAdminSettings.admName || 'TecSoluções Administrativo');
+  const [bannerHeadline, setBannerHeadline] = useState(safeAdminSettings.bannerHeadline || 'Anuncie Sua Empresa Aqui');
+  const [bannerSubtext, setBannerSubtext] = useState(safeAdminSettings.bannerSubtext || 'Espaço exclusivo para divulgação de empresas locais.');
   const [settingsSuccess, setSettingsSuccess] = useState(false);
 
   // Deletion state (safe inline confirmation without window.confirm)
   const [bannerIdToDelete, setBannerIdToDelete] = useState<string | null>(null);
   const [providerIdToDelete, setProviderIdToDelete] = useState<string | null>(null);
+  const [isConfirmingClearDemo, setIsConfirmingClearDemo] = useState(false);
+  const [isClearingDemo, setIsClearingDemo] = useState(false);
 
   // Change password form in settings
   const [newMasterPassword, setNewMasterPassword] = useState('');
@@ -125,10 +140,12 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [syncResult, setSyncResult] = useState<{ providersCount: number; bannersCount: number } | null>(null);
 
   useEffect(() => {
-    setAdmWhatsapp(adminSettings.admWhatsapp);
-    setAdmName(adminSettings.admName);
-    setBannerHeadline(adminSettings.bannerHeadline);
-    setBannerSubtext(adminSettings.bannerSubtext);
+    if (adminSettings) {
+      setAdmWhatsapp(adminSettings.admWhatsapp || '64999317499');
+      setAdmName(adminSettings.admName || 'TecSoluções Administrativo');
+      setBannerHeadline(adminSettings.bannerHeadline || 'Anuncie Sua Empresa Aqui');
+      setBannerSubtext(adminSettings.bannerSubtext || 'Espaço exclusivo para divulgação de empresas locais.');
+    }
   }, [adminSettings]);
 
   if (!isOpen) return null;
@@ -302,9 +319,6 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   };
 
   // Delete Provider (safe without iframe-blocked confirm())
-  const [isConfirmingClearDemo, setIsConfirmingClearDemo] = useState(false);
-  const [isClearingDemo, setIsClearingDemo] = useState(false);
-
   const handleConfirmDeleteProvider = async (id: string) => {
     setProviderIdToDelete(null);
     try {
@@ -335,7 +349,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       return;
     }
     const updated: AdminSettings = {
-      ...adminSettings,
+      ...safeAdminSettings,
       admWhatsapp: val.normalized,
       admName: admName.trim(),
       bannerHeadline: bannerHeadline.trim(),
@@ -363,27 +377,37 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   };
 
   // Statistics & Metrics for ADM
-  const totalProviders = providers.length;
-  const autonomosCount = providers.filter(p => (p.businessType || 'autonomo') === 'autonomo').length;
-  const meisCount = providers.filter(p => p.businessType === 'mei').length;
-  const totalProviderClicks = providers.reduce((acc, p) => acc + (p.clicksCount || 0), 0);
-  const totalBannerClicks = banners.reduce((acc, b) => acc + (b.clicksCount || 0), 0);
+  const safeProviders = Array.isArray(providers) ? providers.filter((p): p is Provider => Boolean(p && p.id)) : [];
+  const safeBanners = Array.isArray(banners) ? banners.filter(Boolean) : [];
+
+  const totalProviders = safeProviders.length;
+  const autonomosCount = safeProviders.filter(p => (p.businessType || 'autonomo') === 'autonomo').length;
+  const meisCount = safeProviders.filter(p => p.businessType === 'mei').length;
+  const totalProviderClicks = safeProviders.reduce((acc, p) => acc + (p.clicksCount || 0), 0);
+  const totalBannerClicks = safeBanners.reduce((acc, b) => acc + (b.clicksCount || 0), 0);
 
   // Filter and sort providers in admin view
-  const filteredProviders = providers
+  const filteredProviders = safeProviders
     .filter(p => {
+      if (!p) return false;
       // Business profile filter
       if (businessFilter === 'autonomo' && p.businessType === 'mei') return false;
       if (businessFilter === 'mei' && p.businessType !== 'mei') return false;
 
       if (!providerSearch.trim()) return true;
-      const term = providerSearch.toLowerCase();
+      const term = providerSearch.toLowerCase().trim();
+      const pName = (p.name || '').toLowerCase();
+      const pCat = (p.category || '').toLowerCase();
+      const pCity = (p.city || '').toLowerCase();
+      const pPhone = (p.whatsapp || '');
+      const pEmail = (p.ownerEmail || '').toLowerCase();
+
       return (
-        p.name.toLowerCase().includes(term) ||
-        p.category.toLowerCase().includes(term) ||
-        p.city.toLowerCase().includes(term) ||
-        p.whatsapp.includes(term) ||
-        (p.ownerEmail && p.ownerEmail.toLowerCase().includes(term))
+        pName.includes(term) ||
+        pCat.includes(term) ||
+        pCity.includes(term) ||
+        pPhone.includes(term) ||
+        pEmail.includes(term)
       );
     })
     .sort((a, b) => {

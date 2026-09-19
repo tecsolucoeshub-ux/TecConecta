@@ -103,13 +103,23 @@ export const Footer: React.FC<FooterProps> = ({
               </button>
             )}
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
             <button onClick={onOpenPrivacyPolicy} className="hover:text-white transition">
               Política de Privacidade
             </button>
             <button onClick={onOpenPrivacyPolicy} className="hover:text-white transition">
               Isenção de Responsabilidade
             </button>
+            {onOpenAdmin && (
+              <button
+                type="button"
+                onClick={onOpenAdmin}
+                className="text-gray-500 hover:text-[#00E5FF] transition flex items-center gap-1 font-medium"
+                title="Acesso ao Painel do Administrador (Ctrl+Shift+A)"
+              >
+                <span>Painel ADM</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
