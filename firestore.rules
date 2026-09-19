@@ -11,16 +11,17 @@ service cloud.firestore {
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-\\.]+$');
     }
 
     // Providers collection - Public read for connecting local clients, validated create/update
     match /providers/{providerId} {
       allow get, list: if true;
-      allow create, update: if isValidId(providerId)
+      allow create: if isValidId(providerId)
         && incoming().name is string
         && incoming().category is string
         && incoming().whatsapp is string;
+      allow update: if isValidId(providerId);
       allow delete: if isValidId(providerId);
     }
 
@@ -34,6 +35,20 @@ service cloud.firestore {
     match /settings/{settingId} {
       allow get, list: if true;
       allow create, update, delete: if isValidId(settingId);
+    }
+
+    // Community Reviews collection
+    match /reviews/{reviewId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(reviewId)
+        && incoming().providerId is string
+        && incoming().rating is number;
+      allow delete: if isValidId(reviewId);
+    }
+
+    // Connection test document
+    match /test/{testId} {
+      allow get: if true;
     }
   }
 }

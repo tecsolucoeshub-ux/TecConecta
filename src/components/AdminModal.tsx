@@ -22,11 +22,13 @@ import {
   Search,
   CheckCircle2,
   Presentation,
-  Play
+  Play,
+  Cloud,
+  RefreshCw
 } from 'lucide-react';
 import { SponsoredBanner, AdminSettings, Provider } from '../types';
 import { CATEGORIES } from '../data/categories';
-import { saveSponsoredBanner, deleteSponsoredBanner, saveAdminSettings } from '../services/firebase';
+import { saveSponsoredBanner, deleteSponsoredBanner, saveAdminSettings, syncAllLocalToCloud } from '../services/firebase';
 import { ImageUploadField } from './ImageUploadField';
 import { normalizeWhatsAppNumber, validateWhatsAppNumber } from '../utils/whatsapp';
 import { ProjectPresentationModal } from './ProjectPresentationModal';
@@ -110,6 +112,10 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [confirmMasterPassword, setConfirmMasterPassword] = useState('');
   const [passwordChangeSuccess, setPasswordChangeSuccess] = useState(false);
   const [passwordChangeError, setPasswordChangeError] = useState<string | null>(null);
+
+  // Cloud multi-device synchronization state
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ providersCount: number; bannersCount: number } | null>(null);
 
   useEffect(() => {
     setAdmWhatsapp(adminSettings.admWhatsapp);
@@ -313,6 +319,21 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     onSettingsUpdated(updated);
     setSettingsSuccess(true);
     setTimeout(() => setSettingsSuccess(false), 3000);
+  };
+
+  // Force Cloud Sync across all local data to Firebase Firestore
+  const handleForceCloudSync = async () => {
+    setIsSyncingCloud(true);
+    setSyncResult(null);
+    try {
+      const res = await syncAllLocalToCloud();
+      setSyncResult(res);
+      setTimeout(() => setSyncResult(null), 5000);
+    } catch (e) {
+      console.error('Cloud sync error:', e);
+    } finally {
+      setIsSyncingCloud(false);
+    }
   };
 
   // Statistics & Metrics for ADM
@@ -1242,6 +1263,45 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                       </button>
                     </div>
                   </form>
+
+                  {/* Section C: Cloud Multi-Device Live Synchronization */}
+                  <div className="p-4 rounded-xl bg-white/5 border border-[#00E5FF]/20 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-[#00E5FF]">
+                        <Cloud className="w-4 h-4" />
+                        <h4 className="text-xs font-bold uppercase tracking-wider">
+                          Sincronização em Nuvem (Multi-Aparelhos)
+                        </h4>
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/20 text-green-300 border border-green-500/30 flex items-center gap-1 font-semibold">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                        Tempo Real Ativo
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-300 leading-relaxed">
+                      O TecConecta sincroniza automaticamente todos os anunciantes, banners e alterações em tempo real usando o Firebase Firestore Cloud.
+                      Cadastros feitos no aparelho do anunciante aparecem instantaneamente na sua base e vice-versa.
+                    </p>
+
+                    {syncResult && (
+                      <div className="p-2.5 rounded-xl bg-green-500/20 border border-green-500/40 text-xs text-green-300 flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>Sincronização concluída com sucesso! ({syncResult.providersCount} prestadores e {syncResult.bannersCount} banners sincronizados na nuvem).</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end pt-1">
+                      <button
+                        type="button"
+                        onClick={handleForceCloudSync}
+                        disabled={isSyncingCloud}
+                        className="px-4 py-2 rounded-xl bg-[#00E5FF]/20 hover:bg-[#00E5FF]/30 border border-[#00E5FF]/40 text-[#00E5FF] font-bold text-xs font-['Outfit'] flex items-center gap-2 transition disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isSyncingCloud ? 'animate-spin' : ''}`} />
+                        <span>{isSyncingCloud ? 'Sincronizando Nuvem...' : 'Forçar Sincronização Agora'}</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
 

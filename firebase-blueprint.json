@@ -135,6 +135,34 @@
         "active",
         "createdAt"
       ]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Avaliação de clientes da comunidade sobre os serviços de um prestador",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "providerId": { "type": "string", "maxLength": 128 },
+        "authorName": { "type": "string", "maxLength": 100 },
+        "rating": { "type": "number" },
+        "serviceDone": { "type": "string", "maxLength": 150 },
+        "comment": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "providerId", "authorName", "rating", "comment", "createdAt"]
+    },
+    "AdminSettings": {
+      "title": "AdminSettings",
+      "description": "Configurações gerais do applet e dados administrativos",
+      "type": "object",
+      "properties": {
+        "admWhatsapp": { "type": "string", "maxLength": 20 },
+        "admName": { "type": "string", "maxLength": 100 },
+        "bannerHeadline": { "type": "string", "maxLength": 150 },
+        "bannerSubtext": { "type": "string", "maxLength": 300 },
+        "adminPin": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["admWhatsapp", "admName"]
     }
   },
   "firestore": {
@@ -145,6 +173,14 @@
     "/banners/{bannerId}": {
       "schema": "SponsoredBanner",
       "description": "Coleção pública de banners patrocinados gerenciados pela administração da TecSoluções"
+    },
+    "/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Avaliações e depoimentos de serviços realizados"
+    },
+    "/settings/{settingId}": {
+      "schema": "AdminSettings",
+      "description": "Configurações e parâmetros de administração"
     }
   }
 }

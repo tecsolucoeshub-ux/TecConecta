@@ -1,22 +1,18 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { 
-  MessageCircle, 
   MapPin, 
-  Star, 
-  Navigation, 
   Layers, 
   Plus, 
   Minus, 
   LocateFixed, 
-  ExternalLink,
   ShieldCheck,
-  Compass
+  Compass,
+  Check
 } from 'lucide-react';
 import { Provider } from '../types';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
 import { getProviderPhoto } from '../utils/imageCompressor';
-import { useTheme } from '../context/ThemeContext';
 import { recordProviderClick } from '../services/firebase';
 
 interface InteractiveMapProps {
@@ -28,23 +24,61 @@ interface InteractiveMapProps {
   centerCoords: { lat: number; lng: number };
 }
 
-type MapLayerType = 'dark' | 'light' | 'satellite';
+export type MapLayerType = 'streets' | 'hybrid' | 'osm' | 'dark';
 
-const TILE_LAYERS: Record<MapLayerType, { url: string; attribution: string; maxZoom: number }> = {
+interface LayerConfig {
+  id: MapLayerType;
+  label: string;
+  shortLabel: string;
+  badge: string;
+  url: string;
+  attribution: string;
+  maxZoom: number;
+  maxNativeZoom: number;
+  subdomains?: string[] | string;
+}
+
+export const MAP_LAYERS: Record<MapLayerType, LayerConfig> = {
+  streets: {
+    id: 'streets',
+    label: 'Ruas & Avenidas (Google Maps)',
+    shortLabel: '🗺️ Ruas',
+    badge: 'Padrão HD',
+    url: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+    attribution: '&copy; Google Maps',
+    maxZoom: 21,
+    maxNativeZoom: 20
+  },
+  hybrid: {
+    id: 'hybrid',
+    label: 'Satélite Nítido + Ruas (Google Híbrido)',
+    shortLabel: '🛰️ Satélite',
+    badge: 'Foto Aérea + Ruas',
+    url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+    attribution: '&copy; Google Maps & Imagens Aéreas',
+    maxZoom: 21,
+    maxNativeZoom: 20
+  },
+  osm: {
+    id: 'osm',
+    label: 'OpenStreetMap Brasil',
+    shortLabel: '🌐 OpenStreet',
+    badge: 'Logradouros',
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; Colaboradores OpenStreetMap',
+    maxZoom: 20,
+    maxNativeZoom: 19
+  },
   dark: {
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://openstreetmap.org">OSM</a>',
-    maxZoom: 19
-  },
-  light: {
-    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://openstreetmap.org">OSM</a>',
-    maxZoom: 19
-  },
-  satellite: {
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attribution: '&copy; Esri &mdash; Maxar, Earthstar Geographics',
-    maxZoom: 18
+    id: 'dark',
+    label: 'Neon Noturno (TecSoluções)',
+    shortLabel: '🌙 Noturno',
+    badge: 'Dark Moderno',
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; CARTO & OSM',
+    maxZoom: 20,
+    maxNativeZoom: 19,
+    subdomains: 'abcd'
   }
 };
 
@@ -56,23 +90,32 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   userCoords,
   centerCoords
 }) => {
-  const { isLight } = useTheme();
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const userMarkerRef = useRef<L.Marker | null>(null);
 
-  const [activeLayer, setActiveLayer] = useState<MapLayerType>(isLight ? 'light' : 'dark');
+  // Default to crystal-clear Google Streets & Roads
+  const [activeLayer, setActiveLayer] = useState<MapLayerType>('streets');
   const [showLayerMenu, setShowLayerMenu] = useState(false);
-  const [currentZoom, setCurrentZoom] = useState(14);
+  const [currentZoom, setCurrentZoom] = useState(15);
 
-  // Sync default layer with theme changes unless user explicitly switched
-  useEffect(() => {
-    if (activeLayer !== 'satellite') {
-      setActiveLayer(isLight ? 'light' : 'dark');
+  // Create Leaflet TileLayer with overzooming protection
+  const buildTileLayer = (config: LayerConfig): L.TileLayer => {
+    const options: L.TileLayerOptions = {
+      attribution: config.attribution,
+      maxZoom: config.maxZoom,
+      maxNativeZoom: config.maxNativeZoom,
+      keepBuffer: 4,
+      updateWhenIdle: false,
+      updateWhenZooming: true
+    };
+    if (config.subdomains) {
+      options.subdomains = config.subdomains;
     }
-  }, [isLight]);
+    return L.tileLayer(config.url, options);
+  };
 
   // Initialize Leaflet Map
   useEffect(() => {
@@ -83,21 +126,18 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
     const map = L.map(mapContainerRef.current, {
       center: [initialLat, initialLng],
-      zoom: 14,
-      zoomControl: false, // We use custom high-tech neon controls
+      zoom: 15,
+      minZoom: 4,
+      maxZoom: 21,
+      zoomControl: false,
       attributionControl: false,
       fadeAnimation: true,
       zoomAnimation: true
     });
 
-    // Add initial tile layer
-    const config = TILE_LAYERS[activeLayer];
-    const tileLayer = L.tileLayer(config.url, {
-      attribution: config.attribution,
-      maxZoom: config.maxZoom,
-      subdomains: 'abcd'
-    }).addTo(map);
-
+    // Add default tile layer (Google Maps Streets)
+    const config = MAP_LAYERS[activeLayer];
+    const tileLayer = buildTileLayer(config).addTo(map);
     tileLayerRef.current = tileLayer;
 
     // Markers layer group
@@ -125,13 +165,8 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       map.removeLayer(tileLayerRef.current);
     }
 
-    const config = TILE_LAYERS[activeLayer];
-    const newTileLayer = L.tileLayer(config.url, {
-      attribution: config.attribution,
-      maxZoom: config.maxZoom,
-      subdomains: 'abcd'
-    }).addTo(map);
-
+    const config = MAP_LAYERS[activeLayer];
+    const newTileLayer = buildTileLayer(config).addTo(map);
     tileLayerRef.current = newTileLayer;
   }, [activeLayer]);
 
@@ -149,21 +184,21 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       const userIcon = L.divIcon({
         className: 'user-location-marker',
         html: `
-          <div style="position: relative; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;">
+          <div style="position: relative; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">
             <div style="position: absolute; inset: 0; border-radius: 50%; background: rgba(0, 229, 255, 0.4); animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
-            <div style="width: 14px; height: 14px; border-radius: 50%; background: #00E5FF; border: 2.5px solid #FFFFFF; box-shadow: 0 0 12px #00E5FF;"></div>
+            <div style="width: 16px; height: 16px; border-radius: 50%; background: #00E5FF; border: 3px solid #FFFFFF; box-shadow: 0 0 14px #00E5FF;"></div>
           </div>
         `,
-        iconSize: [28, 28],
-        iconAnchor: [14, 14]
+        iconSize: [30, 30],
+        iconAnchor: [15, 15]
       });
 
       const userMarker = L.marker([userCoords.lat, userCoords.lng], { icon: userIcon, zIndexOffset: 1000 })
         .addTo(map)
         .bindPopup(`
           <div style="font-family: sans-serif; padding: 4px 6px; text-align: center;">
-            <strong style="color: #00E5FF; font-size: 12px; display: block;">📍 Sua Localização</strong>
-            <span style="font-size: 11px; color: #888;">GPS ativo com precisão</span>
+            <strong style="color: #00E5FF; font-size: 12px; display: block;">📍 Sua Localização Atual</strong>
+            <span style="font-size: 11px; color: #64748b;">GPS conectado com alta precisão</span>
           </div>
         `);
 
@@ -184,40 +219,40 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       const photoUrl = getProviderPhoto(provider.imageUrl, provider.category, provider.name);
       
       const pinColor = isSelected ? '#00E5FF' : '#FF6B00';
-      const glowEffect = isSelected ? 'box-shadow: 0 0 18px #00E5FF, 0 0 30px rgba(0,229,255,0.6); transform: scale(1.15);' : 'box-shadow: 0 4px 12px rgba(0,0,0,0.5);';
-      const borderStyle = isSelected ? 'border: 2px solid #FFFFFF;' : 'border: 1.5px solid rgba(255,255,255,0.8);';
+      const glowEffect = isSelected ? 'box-shadow: 0 0 20px #00E5FF, 0 0 35px rgba(0,229,255,0.7); transform: scale(1.15);' : 'box-shadow: 0 4px 14px rgba(0,0,0,0.5);';
+      const borderStyle = isSelected ? 'border: 2.5px solid #FFFFFF;' : 'border: 2px solid rgba(255,255,255,0.9);';
 
       const customIcon = L.divIcon({
         className: `custom-provider-marker-${provider.id}`,
         html: `
-          <div style="position: relative; width: 38px; height: 46px; cursor: pointer; display: flex; flex-direction: column; align-items: center; transition: transform 0.2s ease;">
-            <div style="width: 36px; height: 36px; border-radius: 50%; background: ${pinColor}; ${borderStyle} ${glowEffect} overflow: hidden; display: flex; align-items: center; justify-content: center; z-index: 2;">
+          <div style="position: relative; width: 40px; height: 48px; cursor: pointer; display: flex; flex-direction: column; align-items: center; transition: transform 0.2s ease;">
+            <div style="width: 38px; height: 38px; border-radius: 50%; background: ${pinColor}; ${borderStyle} ${glowEffect} overflow: hidden; display: flex; align-items: center; justify-content: center; z-index: 2;">
               <img src="${photoUrl}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'" />
             </div>
             <div style="width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid ${pinColor}; margin-top: -2px; z-index: 1;"></div>
           </div>
         `,
-        iconSize: [38, 46],
-        iconAnchor: [19, 46],
-        popupAnchor: [0, -46]
+        iconSize: [40, 48],
+        iconAnchor: [20, 48],
+        popupAnchor: [0, -48]
       });
 
       const marker = L.marker([provider.lat, provider.lng], { icon: customIcon });
 
-      // Build WhatsApp message
+      // Build WhatsApp and Navigation URLs
       const whatsappMsg = `Olá ${provider.name}, vi seu anúncio no TecConecta (TecSoluções) e gostaria de solicitar um orçamento!`;
       const whatsappUrl = buildWhatsAppUrl(provider.whatsapp, whatsappMsg);
       const googleMapsRouteUrl = `https://www.google.com/maps/dir/?api=1&destination=${provider.lat},${provider.lng}`;
 
       const popupHtml = `
-        <div style="min-width: 230px; max-width: 270px; font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; padding: 2px;">
-          <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
-            <img src="${photoUrl}" style="width: 44px; height: 44px; border-radius: 8px; object-fit: cover; border: 1px solid #e2e8f0;" />
+        <div style="min-width: 240px; max-width: 280px; font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; padding: 2px;">
+          <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
+            <img src="${photoUrl}" style="width: 48px; height: 48px; border-radius: 10px; object-fit: cover; border: 1px solid #e2e8f0;" />
             <div style="flex: 1; min-width: 0;">
-              <span style="font-size: 9.5px; font-weight: 700; text-transform: uppercase; background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 2px;">
+              <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; background: #e0f2fe; color: #0369a1; padding: 2px 7px; border-radius: 4px; display: inline-block; margin-bottom: 2px;">
                 ${provider.category}
               </span>
-              <h4 style="font-size: 13px; font-weight: 800; color: #0f172a; margin: 0; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              <h4 style="font-size: 14px; font-weight: 800; color: #0f172a; margin: 0; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                 ${provider.name}
               </h4>
               <div style="font-size: 11px; color: #f59e0b; font-weight: 700; margin-top: 2px;">
@@ -226,8 +261,8 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
             </div>
           </div>
 
-          <div style="font-size: 11px; color: #64748b; line-height: 1.3; margin-bottom: 10px; background: #f8fafc; padding: 6px; border-radius: 6px;">
-            📍 ${provider.neighborhood ? `${provider.neighborhood}, ` : ''}${provider.city}
+          <div style="font-size: 11.5px; color: #475569; line-height: 1.35; margin-bottom: 10px; background: #f8fafc; padding: 7px 9px; border-radius: 8px; border-left: 3px solid #00E5FF;">
+            📍 ${provider.address ? `${provider.address}, ` : ''}${provider.neighborhood ? `${provider.neighborhood}, ` : ''}${provider.city}
           </div>
 
           <div style="display: flex; flex-direction: column; gap: 6px;">
@@ -236,7 +271,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
               target="_blank" 
               rel="noopener noreferrer" 
               id="map-popup-wa-${provider.id}"
-              style="display: flex; align-items: center; justify-content: center; gap: 6px; background: #25D366; color: #ffffff; text-decoration: none; font-size: 12px; font-weight: 700; padding: 7px 10px; border-radius: 8px; box-shadow: 0 2px 6px rgba(37,211,102,0.3);"
+              style="display: flex; align-items: center; justify-content: center; gap: 6px; background: #25D366; color: #ffffff; text-decoration: none; font-size: 12px; font-weight: 700; padding: 8px 12px; border-radius: 8px; box-shadow: 0 2px 6px rgba(37,211,102,0.3);"
             >
               <span>💬 Chamar no WhatsApp</span>
             </a>
@@ -245,9 +280,9 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
               href="${googleMapsRouteUrl}" 
               target="_blank" 
               rel="noopener noreferrer" 
-              style="display: flex; align-items: center; justify-content: center; gap: 4px; background: #f1f5f9; color: #334155; text-decoration: none; font-size: 11px; font-weight: 600; padding: 5px 8px; border-radius: 6px;"
+              style="display: flex; align-items: center; justify-content: center; gap: 4px; background: #f1f5f9; color: #334155; text-decoration: none; font-size: 11px; font-weight: 600; padding: 6px 10px; border-radius: 6px;"
             >
-              <span>🧭 Abrir Rota GPS</span>
+              <span>🧭 Abrir Rota GPS no Google</span>
             </a>
           </div>
         </div>
@@ -264,7 +299,6 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       });
 
       marker.on('popupopen', () => {
-        // Track clicks when user presses the popup's WhatsApp link
         const btn = document.getElementById(`map-popup-wa-${provider.id}`);
         if (btn) {
           btn.onclick = () => {
@@ -313,14 +347,14 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     if (!map) return;
 
     if (userCoords && userCoords.lat && userCoords.lng) {
-      map.flyTo([userCoords.lat, userCoords.lng], 15, { duration: 1 });
+      map.flyTo([userCoords.lat, userCoords.lng], 16, { duration: 1 });
       if (userMarkerRef.current) {
         userMarkerRef.current.openPopup();
       }
     } else if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          map.flyTo([pos.coords.latitude, pos.coords.longitude], 15, { duration: 1 });
+          map.flyTo([pos.coords.latitude, pos.coords.longitude], 16, { duration: 1 });
         },
         () => {
           alert('Localização desativada ou não autorizada no navegador.');
@@ -338,7 +372,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         style={{ minHeight: '520px' }}
       />
 
-      {/* Top Left: Providers Count Badge & Status */}
+      {/* Top Left: Providers Count Badge & Clear Selection */}
       <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0B132B]/90 border border-white/10 backdrop-blur-md text-xs font-semibold text-white shadow-lg">
           <span className="w-2 h-2 rounded-full bg-[#00E5FF] animate-pulse" />
@@ -355,65 +389,75 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         )}
       </div>
 
-      {/* Top Right: Layer Switcher Button */}
+      {/* Top Right: Visible Quick Layer Switcher Toolbar */}
       <div className="absolute top-3 right-3 z-10">
-        <div className="relative">
+        {/* Desktop / Tablet: Quick Pill Switcher */}
+        <div className="hidden sm:flex items-center p-1 rounded-xl bg-[#0B132B]/90 border border-white/15 backdrop-blur-md shadow-2xl gap-1">
+          {(Object.keys(MAP_LAYERS) as MapLayerType[]).map((layerKey) => {
+            const layer = MAP_LAYERS[layerKey];
+            const isActive = activeLayer === layerKey;
+            return (
+              <button
+                key={layerKey}
+                id={`btn-map-layer-${layerKey}`}
+                onClick={() => setActiveLayer(layerKey)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+                  isActive
+                    ? 'bg-[#00E5FF] text-[#0B132B] shadow-md shadow-[#00E5FF]/30 font-extrabold scale-105'
+                    : 'text-gray-300 hover:text-white hover:bg-white/10'
+                }`}
+                title={layer.label}
+              >
+                <span>{layer.shortLabel}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Mobile Dropdown Button */}
+        <div className="sm:hidden relative">
           <button
-            id="btn-map-layer-switcher"
+            id="btn-map-layer-mobile-toggle"
             onClick={() => setShowLayerMenu(!showLayerMenu)}
-            className="p-2 rounded-xl bg-[#0B132B]/90 border border-white/10 text-gray-200 hover:text-[#00E5FF] hover:border-[#00E5FF]/40 transition backdrop-blur-md shadow-lg"
-            title="Alterar Estilo do Mapa"
+            className="px-2.5 py-1.5 rounded-xl bg-[#0B132B]/90 border border-white/15 text-[#00E5FF] font-bold text-xs flex items-center gap-1.5 backdrop-blur-md shadow-lg"
           >
-            <Layers className="w-4 h-4" />
+            <Layers className="w-3.5 h-3.5" />
+            <span>{MAP_LAYERS[activeLayer].shortLabel}</span>
           </button>
 
           {showLayerMenu && (
-            <div className="absolute right-0 mt-2 w-44 rounded-xl bg-[#0B132B] border border-[#00E5FF]/30 shadow-2xl p-2 z-20 space-y-1">
+            <div className="absolute right-0 mt-2 w-56 rounded-xl bg-[#0B132B] border border-[#00E5FF]/30 shadow-2xl p-2 z-20 space-y-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-2 block py-1">
-                Visualização
+                Visualização do Mapa
               </span>
-              <button
-                onClick={() => {
-                  setActiveLayer('dark');
-                  setShowLayerMenu(false);
-                }}
-                className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center justify-between ${
-                  activeLayer === 'dark' ? 'bg-[#00E5FF]/20 text-[#00E5FF]' : 'text-gray-300 hover:bg-white/5'
-                }`}
-              >
-                <span>Neon Noturno (Dark)</span>
-                {activeLayer === 'dark' && <span className="w-1.5 h-1.5 rounded-full bg-[#00E5FF]" />}
-              </button>
-              <button
-                onClick={() => {
-                  setActiveLayer('light');
-                  setShowLayerMenu(false);
-                }}
-                className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center justify-between ${
-                  activeLayer === 'light' ? 'bg-[#00E5FF]/20 text-[#00E5FF]' : 'text-gray-300 hover:bg-white/5'
-                }`}
-              >
-                <span>Mapa Claro (Positron)</span>
-                {activeLayer === 'light' && <span className="w-1.5 h-1.5 rounded-full bg-[#00E5FF]" />}
-              </button>
-              <button
-                onClick={() => {
-                  setActiveLayer('satellite');
-                  setShowLayerMenu(false);
-                }}
-                className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center justify-between ${
-                  activeLayer === 'satellite' ? 'bg-[#00E5FF]/20 text-[#00E5FF]' : 'text-gray-300 hover:bg-white/5'
-                }`}
-              >
-                <span>Satélite Real</span>
-                {activeLayer === 'satellite' && <span className="w-1.5 h-1.5 rounded-full bg-[#00E5FF]" />}
-              </button>
+              {(Object.keys(MAP_LAYERS) as MapLayerType[]).map((layerKey) => {
+                const layer = MAP_LAYERS[layerKey];
+                const isActive = activeLayer === layerKey;
+                return (
+                  <button
+                    key={layerKey}
+                    onClick={() => {
+                      setActiveLayer(layerKey);
+                      setShowLayerMenu(false);
+                    }}
+                    className={`w-full text-left px-2.5 py-2 rounded-lg text-xs font-semibold transition flex items-center justify-between ${
+                      isActive ? 'bg-[#00E5FF]/20 text-[#00E5FF]' : 'text-gray-300 hover:bg-white/5'
+                    }`}
+                  >
+                    <div>
+                      <div className="font-bold">{layer.shortLabel}</div>
+                      <div className="text-[10px] text-gray-400">{layer.badge}</div>
+                    </div>
+                    {isActive && <Check className="w-4 h-4 text-[#00E5FF]" />}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
       </div>
 
-      {/* Bottom Right: Quick Navigation & Zoom Controls */}
+      {/* Bottom Right: GPS Location & Navigation Controls */}
       <div className="absolute bottom-4 right-3 z-10 flex flex-col gap-2">
         {/* Locate User GPS */}
         <button
@@ -440,7 +484,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           <button
             onClick={() => mapInstanceRef.current?.zoomIn()}
             className="p-2 text-gray-200 hover:text-[#00E5FF] hover:bg-white/5 border-b border-white/10 transition"
-            title="Aumentar Zoom"
+            title="Aumentar Zoom (Ruas Detalhadas)"
           >
             <Plus className="w-4 h-4" />
           </button>
@@ -454,10 +498,10 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         </div>
       </div>
 
-      {/* Bottom Left: Guarantee Notice of Zero API Keys / Zero Interruption */}
-      <div className="absolute bottom-3 left-3 z-10 hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-[#0B132B]/85 border border-[#00E5FF]/20 text-[10px] text-gray-300 backdrop-blur-md">
-        <ShieldCheck className="w-3 h-3 text-[#00E5FF]" />
-        <span>Mapa Autônomo TecSoluções • 100% Funcional sem falhas de API</span>
+      {/* Bottom Left: Guarantee Notice */}
+      <div className="absolute bottom-3 left-3 z-10 hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-[#0B132B]/90 border border-[#00E5FF]/30 text-[10px] text-gray-200 backdrop-blur-md shadow-md">
+        <ShieldCheck className="w-3.5 h-3.5 text-[#00E5FF]" />
+        <span>Navegação por Ruas & Avenidas em Alta Definição • TecSoluções</span>
       </div>
     </div>
   );

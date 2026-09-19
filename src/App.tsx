@@ -1,7 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, MapPin, Navigation, Sparkles, Filter, CheckCircle2, MessageCircle, AlertCircle, RefreshCw, Compass, Building2, Trash2 } from 'lucide-react';
 import { Provider, ViewMode, SponsoredBanner, AdminSettings } from './types';
-import { fetchProviders, clearDemoProviders, resetDemoProviders, fetchSponsoredBanners, fetchAdminSettings, DEFAULT_ADMIN_SETTINGS, recordProviderClick } from './services/firebase';
+import {
+  fetchProviders,
+  subscribeToProviders,
+  clearDemoProviders,
+  resetDemoProviders,
+  fetchSponsoredBanners,
+  subscribeToBanners,
+  fetchAdminSettings,
+  subscribeToAdminSettings,
+  DEFAULT_ADMIN_SETTINGS,
+  recordProviderClick
+} from './services/firebase';
 import { POPULAR_CITIES } from './data/categories';
 import { TecNavbar } from './components/TecNavbar';
 import { TecBrandHero } from './components/TecBrandHero';
@@ -102,25 +113,28 @@ export default function App() {
   // Toast message
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Initial load
+  // Multi-device realtime cloud synchronization
   useEffect(() => {
-    async function loadData() {
-      setIsLoading(true);
-      try {
-        const [providersData, bannersData] = await Promise.all([
-          fetchProviders(),
-          fetchSponsoredBanners()
-        ]);
-        setProviders(providersData);
-        setBanners(bannersData);
-        setAdminSettings(fetchAdminSettings());
-      } catch (e) {
-        console.error('Failed to load initial data:', e);
-      } finally {
+    setIsLoading(true);
+
+    const unsubProviders = subscribeToProviders(
+      (updatedProviders) => {
+        setProviders(updatedProviders);
+        setIsLoading(false);
+      },
+      (error) => {
+        console.warn('Providers subscription fallback error:', error);
         setIsLoading(false);
       }
-    }
-    loadData();
+    );
+
+    const unsubBanners = subscribeToBanners((updatedBanners) => {
+      setBanners(updatedBanners);
+    });
+
+    const unsubSettings = subscribeToAdminSettings((updatedSettings) => {
+      setAdminSettings(updatedSettings);
+    });
 
     // Listen for cross-component updates
     const handleProviderAdded = (event: CustomEvent<Provider>) => {
@@ -182,6 +196,9 @@ export default function App() {
     handleHashCheck();
 
     return () => {
+      unsubProviders();
+      unsubBanners();
+      unsubSettings();
       window.removeEventListener('tecconecta:provider_added' as any, handleProviderAdded);
       window.removeEventListener('tecconecta:provider_updated' as any, handleProviderUpdated);
       window.removeEventListener('tecconecta:provider_deleted' as any, handleProviderDeleted);

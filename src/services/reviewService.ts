@@ -1,6 +1,6 @@
 import { Review, Provider } from '../types';
-import { updateProvider, fetchProviders } from './firebase';
-import firebaseConfig from '../firebase-applet-config.json';
+import { updateProvider, db, sanitizeForFirestore } from './firebase';
+import { collection, getDocs, query, where, orderBy, doc, setDoc } from 'firebase/firestore';
 
 const LOCAL_STORAGE_REVIEWS_KEY = 'tecconecta_reviews_v1';
 const LOCAL_STORAGE_USER_REVIEWS_KEY = 'tecconecta_user_evaluated_providers_v1';
@@ -54,25 +54,6 @@ const SEED_REVIEWS: Review[] = [
   }
 ];
 
-let firestoreDb: any = null;
-
-async function getFirestoreInstance() {
-  if (firestoreDb) return firestoreDb;
-  try {
-    if (firebaseConfig && firebaseConfig.apiKey && firebaseConfig.projectId) {
-      const { initializeApp, getApps } = await import('firebase/app');
-      const { getFirestore } = await import('firebase/firestore');
-      const apps = getApps();
-      const app = apps.length > 0 ? apps[0] : initializeApp(firebaseConfig);
-      firestoreDb = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
-      return firestoreDb;
-    }
-  } catch (e) {
-    console.info('ReviewService: Operating in local storage mode', e);
-  }
-  return null;
-}
-
 function getAllStoredReviews(): Review[] {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_REVIEWS_KEY);
@@ -96,33 +77,29 @@ function getAllStoredReviews(): Review[] {
  * Fetch all reviews for a specific provider
  */
 export async function fetchReviewsForProvider(providerId: string): Promise<Review[]> {
-  const db = await getFirestoreInstance();
-  if (db) {
-    try {
-      const { collection, getDocs, query, where, orderBy } = await import('firebase/firestore');
-      const q = query(
-        collection(db, 'reviews'),
-        where('providerId', '==', providerId),
-        orderBy('createdAt', 'desc')
+  try {
+    const q = query(
+      collection(db, 'reviews'),
+      where('providerId', '==', providerId),
+      orderBy('createdAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    const remoteReviews: Review[] = [];
+    snapshot.forEach((d) => {
+      remoteReviews.push({ id: d.id, ...d.data() } as Review);
+    });
+    if (remoteReviews.length > 0) {
+      // Sync local cache
+      const allStored = getAllStoredReviews();
+      const otherReviews = allStored.filter((r) => r.providerId !== providerId);
+      localStorage.setItem(
+        LOCAL_STORAGE_REVIEWS_KEY,
+        JSON.stringify([...remoteReviews, ...otherReviews])
       );
-      const snapshot = await getDocs(q);
-      const remoteReviews: Review[] = [];
-      snapshot.forEach((d) => {
-        remoteReviews.push({ id: d.id, ...d.data() } as Review);
-      });
-      if (remoteReviews.length > 0) {
-        // Sync local cache
-        const allStored = getAllStoredReviews();
-        const otherReviews = allStored.filter((r) => r.providerId !== providerId);
-        localStorage.setItem(
-          LOCAL_STORAGE_REVIEWS_KEY,
-          JSON.stringify([...remoteReviews, ...otherReviews])
-        );
-        return remoteReviews;
-      }
-    } catch (e) {
-      console.warn('Firestore fetch reviews fallback to local:', e);
+      return remoteReviews;
     }
+  } catch (e) {
+    console.warn('Firestore fetch reviews fallback to local:', e);
   }
 
   // Fallback to local storage
@@ -205,15 +182,12 @@ export async function submitProviderReview(
   localStorage.setItem(LOCAL_STORAGE_REVIEWS_KEY, JSON.stringify([newReview, ...allReviews]));
   markUserReviewedProvider(provider.id);
 
-  // 3. Persist review to Firestore if available
-  const db = await getFirestoreInstance();
-  if (db) {
-    try {
-      const { doc, setDoc } = await import('firebase/firestore');
-      await setDoc(doc(db, 'reviews', newReview.id), newReview);
-    } catch (e) {
-      console.warn('Firestore review set error:', e);
-    }
+  // 3. Persist review to Firestore
+  try {
+    await setDoc(doc(db, 'reviews', newReview.id), sanitizeForFirestore(newReview), { merge: true });
+    console.log(`[TecConecta] Avaliação ${newReview.id} salva no Firestore Cloud.`);
+  } catch (e) {
+    console.warn('Firestore review set error:', e);
   }
 
   // 4. Update provider's official rating and count

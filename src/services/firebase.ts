@@ -1,6 +1,21 @@
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import {
+  getFirestore,
+  collection,
+  doc,
+  getDocs,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  increment,
+  getDocFromServer
+} from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { Provider, SponsoredBanner, AdminSettings } from '../types';
 import { SEED_PROVIDERS } from '../data/seedProviders';
-import firebaseConfig from '../firebase-applet-config.json';
+import firebaseConfig from '../../firebase-applet-config.json';
 import { normalizeWhatsAppNumber } from '../utils/whatsapp';
 
 export enum OperationType {
@@ -11,7 +26,6 @@ export enum OperationType {
   GET = 'get',
   WRITE = 'write',
 }
-
 
 export interface FirestoreErrorInfo {
   error: string;
@@ -30,16 +44,35 @@ export interface FirestoreErrorInfo {
   };
 }
 
+// ----------------------------------------------------
+// FIREBASE SYNCHRONOUS INITIALIZATION
+// ----------------------------------------------------
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+export const db = firebaseConfig.firestoreDatabaseId
+  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+  : getFirestore(app);
+
+let authInstance: any = null;
+try {
+  authInstance = getAuth(app);
+} catch (e) {
+  console.warn('[TecConecta] Firebase Auth não inicializado ou indisponível:', e);
+}
+export const auth = authInstance;
+
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
-      userId: null,
-      email: null,
-      emailVerified: null,
-      isAnonymous: true,
-      tenantId: null,
-      providerInfo: []
+      userId: auth?.currentUser?.uid || null,
+      email: auth?.currentUser?.email || null,
+      emailVerified: auth?.currentUser?.emailVerified || null,
+      isAnonymous: auth?.currentUser?.isAnonymous ?? true,
+      tenantId: auth?.currentUser?.tenantId || null,
+      providerInfo: auth?.currentUser?.providerData?.map((provider: any) => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
     },
     operationType,
     path
@@ -48,17 +81,39 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
+// Test connection on boot
+export async function testConnection(): Promise<boolean> {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+    console.log('[TecConecta] Conexão com Firestore Cloud verificada com sucesso.');
+    return true;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.warn('[TecConecta] Cliente Firestore operando em modo offline.');
+    } else {
+      console.log('[TecConecta] Resposta de conexão do Firestore:', error);
+    }
+    return false;
+  }
+}
+testConnection().catch(() => {});
+
+// ----------------------------------------------------
+// LOCAL STORAGE KEYS & DATA HELPERS
+// ----------------------------------------------------
 const LOCAL_STORAGE_KEY = 'tecconecta_providers_v1';
+const LOCAL_STORAGE_BANNERS_KEY = 'tecconecta_sponsored_banners_v1';
+const LOCAL_STORAGE_ADMIN_KEY = 'tecconecta_admin_settings_v1';
 
 // Helper to remove any duplicate provider instances and normalize phone numbers
-function deduplicateProviders(list: Provider[]): Provider[] {
+export function deduplicateProviders(list: Provider[]): Provider[] {
   const seenIds = new Set<string>();
   const seenPhones = new Set<string>();
   const seenNamesCities = new Set<string>();
 
   return list.filter((p) => {
     if (!p || !p.id) return false;
-    // Only update the initial legacy seed placeholder if it still has the old dummy numbers or old centroid
+    // Update legacy seed placeholder phone number if still present
     if (
       (p.id === 'prov-tecsolucoes' || p.id === 'prov-1') &&
       p.whatsapp &&
@@ -70,7 +125,6 @@ function deduplicateProviders(list: Provider[]): Provider[] {
       p.lat = -17.8082;
       p.lng = -50.9328;
       p.cep = '75912-182';
-      // If photo was lost, empty or broken, restore the official tech avatar
       if (!p.imageUrl || !p.imageUrl.trim()) {
         p.imageUrl = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=80';
       }
@@ -95,7 +149,7 @@ function deduplicateProviders(list: Provider[]): Provider[] {
 }
 
 // Synchronous local state loader
-function getStoredProviders(): Provider[] {
+export function getStoredProviders(): Provider[] {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!raw) {
@@ -108,7 +162,6 @@ function getStoredProviders(): Provider[] {
       return SEED_PROVIDERS;
     }
     const unique = deduplicateProviders(parsed);
-    // Always persist healed/normalized providers
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(unique));
     return unique;
   } catch (err) {
@@ -117,48 +170,233 @@ function getStoredProviders(): Provider[] {
   }
 }
 
-// Check if Firebase config is available
-let firestoreDb: any = null;
-
-async function initFirebaseIfAvailable() {
-  try {
-    if (firebaseConfig && firebaseConfig.apiKey && firebaseConfig.projectId) {
-      const { initializeApp } = await import('firebase/app');
-      const { getFirestore } = await import('firebase/firestore');
-      const app = initializeApp(firebaseConfig);
-      firestoreDb = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
-      console.log('TecConecta: Firebase Firestore connected successfully.');
-    } else {
-      console.info('TecConecta: Operating in standalone local repository mode.');
+// Helper to strip undefined values so Firestore never rejects payloads
+export function sanitizeForFirestore(data: any): any {
+  if (!data || typeof data !== 'object') return data;
+  const clean: Record<string, any> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== undefined) {
+      if (Array.isArray(value)) {
+        clean[key] = value.map(item => sanitizeForFirestore(item));
+      } else if (typeof value === 'object' && value !== null) {
+        clean[key] = sanitizeForFirestore(value);
+      } else {
+        clean[key] = value;
+      }
     }
+  }
+  return clean;
+}
+
+// ----------------------------------------------------
+// CLOUD SEEDING HELPERS
+// ----------------------------------------------------
+let isSeedingProviders = false;
+async function seedInitialProvidersIfEmpty() {
+  if (isSeedingProviders) return;
+  isSeedingProviders = true;
+  try {
+    console.log('[TecConecta] Base de prestadores na nuvem vazia. Semeando prestadores verificados iniciais...');
+    const local = getStoredProviders();
+    const listToSeed = local.length > 0 ? local : SEED_PROVIDERS;
+    for (const p of listToSeed) {
+      await setDoc(doc(db, 'providers', p.id), sanitizeForFirestore(p), { merge: true });
+    }
+    console.log('[TecConecta] Prestadores verificados sincronizados com o Firestore Cloud.');
   } catch (e) {
-    console.info('TecConecta: Operating in standalone local repository mode.', e);
+    console.warn('[TecConecta] Falha ao semear prestadores no Firestore:', e);
+  } finally {
+    isSeedingProviders = false;
   }
 }
 
-// Trigger lazy initialization
-initFirebaseIfAvailable();
+let isSeedingBanners = false;
+async function seedInitialBannersIfEmpty() {
+  if (isSeedingBanners) return;
+  isSeedingBanners = true;
+  try {
+    console.log('[TecConecta] Base de banners na nuvem vazia. Semeando banners patrocinados iniciais...');
+    for (const b of SEED_BANNERS) {
+      await setDoc(doc(db, 'banners', b.id), sanitizeForFirestore(b), { merge: true });
+    }
+    console.log('[TecConecta] Banners patrocinados sincronizados com o Firestore Cloud.');
+  } catch (e) {
+    console.warn('[TecConecta] Falha ao semear banners no Firestore:', e);
+  } finally {
+    isSeedingBanners = false;
+  }
+}
+
+// ----------------------------------------------------
+// REALTIME SUBSCRIPTIONS (MULTI-DEVICE LIVE SYNC)
+// ----------------------------------------------------
+
+/**
+ * Subscribe to real-time updates for providers.
+ * Calls callback immediately with local cache, then updates on every cloud change.
+ */
+export function subscribeToProviders(
+  callback: (providers: Provider[]) => void,
+  onError?: (err: any) => void
+): () => void {
+  // Emit local cache immediately for zero-delay UI rendering
+  const cached = getStoredProviders();
+  if (cached.length > 0) {
+    callback(cached);
+  }
+
+  const providersRef = collection(db, 'providers');
+
+  const unsubscribe = onSnapshot(
+    providersRef,
+    (snapshot) => {
+      if (snapshot.empty) {
+        seedInitialProvidersIfEmpty();
+        callback(getStoredProviders());
+        return;
+      }
+
+      const remoteList: Provider[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as Provider;
+        remoteList.push({ ...data, id: docSnap.id });
+      });
+
+      // Sort by createdAt descending
+      remoteList.sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeB - timeA;
+      });
+
+      const unique = deduplicateProviders(remoteList);
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(unique));
+      callback(unique);
+
+      // Auto-heal: Check if this device has any local user-created advertiser not yet in the cloud
+      const remoteIds = new Set(snapshot.docs.map(d => d.id));
+      const unsyncedLocals = cached.filter(p => !remoteIds.has(p.id) && !p.id.startsWith('seed-'));
+      if (unsyncedLocals.length > 0) {
+        console.log(`[TecConecta] Sincronizando ${unsyncedLocals.length} anunciantes locais pendentes com a nuvem...`);
+        unsyncedLocals.forEach(p => {
+          setDoc(doc(db, 'providers', p.id), sanitizeForFirestore(p), { merge: true }).catch(console.warn);
+        });
+      }
+    },
+    (error) => {
+      console.warn('[TecConecta] Snapshot error in providers:', error);
+      onError?.(error);
+      callback(getStoredProviders());
+    }
+  );
+
+  return unsubscribe;
+}
+
+/**
+ * Subscribe to real-time updates for sponsored banners.
+ */
+export function subscribeToBanners(
+  callback: (banners: SponsoredBanner[]) => void,
+  onError?: (err: any) => void
+): () => void {
+  const cached = getStoredBanners();
+  if (cached.length > 0) {
+    callback(cached);
+  }
+
+  const bannersRef = collection(db, 'banners');
+
+  const unsubscribe = onSnapshot(
+    bannersRef,
+    (snapshot) => {
+      if (snapshot.empty) {
+        seedInitialBannersIfEmpty();
+        callback(getStoredBanners());
+        return;
+      }
+
+      const remoteList: SponsoredBanner[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as SponsoredBanner;
+        remoteList.push({ ...data, id: docSnap.id });
+      });
+
+      remoteList.sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeB - timeA;
+      });
+
+      localStorage.setItem(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(remoteList));
+      callback(remoteList);
+    },
+    (error) => {
+      console.warn('[TecConecta] Snapshot error in banners:', error);
+      onError?.(error);
+      callback(getStoredBanners());
+    }
+  );
+
+  return unsubscribe;
+}
+
+/**
+ * Subscribe to real-time admin settings.
+ */
+export function subscribeToAdminSettings(
+  callback: (settings: AdminSettings) => void
+): () => void {
+  const cached = fetchAdminSettings();
+  callback(cached);
+
+  const ref = doc(db, 'settings', 'general');
+
+  const unsubscribe = onSnapshot(
+    ref,
+    (docSnap) => {
+      if (docSnap.exists()) {
+        const remote = { ...DEFAULT_ADMIN_SETTINGS, ...(docSnap.data() as AdminSettings) };
+        localStorage.setItem(LOCAL_STORAGE_ADMIN_KEY, JSON.stringify(remote));
+        callback(remote);
+      } else {
+        // Initialize default in Firestore
+        setDoc(ref, sanitizeForFirestore(DEFAULT_ADMIN_SETTINGS), { merge: true }).catch(console.warn);
+      }
+    },
+    (error) => {
+      console.warn('[TecConecta] Snapshot error in admin settings:', error);
+    }
+  );
+
+  return unsubscribe;
+}
+
+// ----------------------------------------------------
+// PROVIDERS CRUD OPERATIONS
+// ----------------------------------------------------
 
 export async function fetchProviders(): Promise<Provider[]> {
-  const path = 'providers';
-  if (firestoreDb) {
-    try {
-      const { collection, getDocs, orderBy, query } = await import('firebase/firestore');
-      const q = query(collection(firestoreDb, path), orderBy('createdAt', 'desc'));
-      const snapshot = await getDocs(q);
+  try {
+    const snapshot = await getDocs(collection(db, 'providers'));
+    if (!snapshot.empty) {
       const remoteList: Provider[] = [];
-      snapshot.forEach(doc => {
-        remoteList.push({ id: doc.id, ...doc.data() } as Provider);
+      snapshot.forEach(docSnap => {
+        remoteList.push({ ...docSnap.data(), id: docSnap.id } as Provider);
       });
-      if (remoteList.length > 0) {
-        const unique = deduplicateProviders(remoteList);
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(unique));
-        return unique;
-      }
-    } catch (error) {
-      console.warn('Firestore fetch fallback to local store:', error);
-      // fallback to local storage
+      remoteList.sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeB - timeA;
+      });
+      const unique = deduplicateProviders(remoteList);
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(unique));
+      return unique;
+    } else {
+      seedInitialProvidersIfEmpty();
     }
+  } catch (error) {
+    console.warn('[TecConecta] Firestore fetch fallback to local store:', error);
   }
   return getStoredProviders();
 }
@@ -168,8 +406,8 @@ export async function saveProvider(provider: Provider): Promise<Provider> {
   if (provider.whatsapp) {
     provider.whatsapp = normalizeWhatsAppNumber(provider.whatsapp);
   }
-  const path = `providers/${provider.id}`;
-  // 1. Always update local storage first with deduplication to prevent double banners or cards
+
+  // 1. Immediately update local storage for optimistic responsiveness
   const current = getStoredProviders();
   const cleanPhone = (provider.whatsapp || '').replace(/\D/g, '');
   const cleanName = (provider.name || '').trim().toLowerCase();
@@ -188,39 +426,25 @@ export async function saveProvider(provider: Provider): Promise<Provider> {
   const updated = deduplicateProviders([provider, ...filtered]);
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
 
-  // 2. Persist to Firestore if available
-  if (firestoreDb) {
-    try {
-      const { doc, setDoc } = await import('firebase/firestore');
-      await setDoc(doc(firestoreDb, 'providers', provider.id), sanitizeForFirestore(provider), { merge: true });
-    } catch (error) {
-      console.warn('Firestore write fallback to local store:', error);
-    }
+  // 2. Persist to Firestore CLOUD with await and strict error catching
+  try {
+    const docRef = doc(db, 'providers', provider.id);
+    await setDoc(docRef, sanitizeForFirestore(provider), { merge: true });
+    console.log(`[TecConecta] Anunciante ${provider.name} (${provider.id}) gravado no Firestore Cloud.`);
+  } catch (error) {
+    console.error('[TecConecta] Erro ao salvar anunciante no Firestore Cloud:', error);
+    throw error;
   }
 
-  // Trigger cross-component event
+  // 3. Trigger cross-component event
   window.dispatchEvent(new CustomEvent('tecconecta:provider_added', { detail: provider }));
-
   return provider;
-}
-
-// Helper to strip undefined values so Firestore never rejects payloads
-function sanitizeForFirestore(data: any): any {
-  if (!data || typeof data !== 'object') return data;
-  const clean: Record<string, any> = {};
-  for (const [key, value] of Object.entries(data)) {
-    if (value !== undefined) {
-      clean[key] = value;
-    }
-  }
-  return clean;
 }
 
 export async function updateProvider(id: string, updates: Partial<Provider>): Promise<Provider> {
   if (updates.whatsapp) {
     updates.whatsapp = normalizeWhatsAppNumber(updates.whatsapp);
   }
-  const path = `providers/${id}`;
   const current = getStoredProviders();
   const existing = current.find(p => p.id === id);
   if (!existing) {
@@ -230,19 +454,19 @@ export async function updateProvider(id: string, updates: Partial<Provider>): Pr
   const updated: Provider = {
     ...existing,
     ...updates,
-    id // preserve id
+    id
   };
 
   const updatedList = current.map(p => (p.id === id ? updated : p));
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedList));
 
-  if (firestoreDb) {
-    try {
-      const { doc, setDoc } = await import('firebase/firestore');
-      await setDoc(doc(firestoreDb, 'providers', id), sanitizeForFirestore(updated), { merge: true });
-    } catch (error) {
-      console.warn('Firestore update fallback to local store:', error);
-    }
+  try {
+    const docRef = doc(db, 'providers', id);
+    await setDoc(docRef, sanitizeForFirestore(updated), { merge: true });
+    console.log(`[TecConecta] Anunciante ${id} atualizado no Firestore Cloud.`);
+  } catch (error) {
+    console.error('[TecConecta] Erro ao atualizar anunciante no Firestore Cloud:', error);
+    throw error;
   }
 
   window.dispatchEvent(new CustomEvent('tecconecta:provider_updated', { detail: updated }));
@@ -254,13 +478,13 @@ export async function deleteProvider(id: string): Promise<boolean> {
   const filtered = current.filter(p => p.id !== id);
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(filtered));
 
-  if (firestoreDb) {
-    try {
-      const { doc, deleteDoc } = await import('firebase/firestore');
-      await deleteDoc(doc(firestoreDb, 'providers', id));
-    } catch (error) {
-      console.warn('Firestore delete fallback to local store:', error);
-    }
+  try {
+    const docRef = doc(db, 'providers', id);
+    await deleteDoc(docRef);
+    console.log(`[TecConecta] Anunciante ${id} removido do Firestore Cloud.`);
+  } catch (error) {
+    console.error('[TecConecta] Erro ao remover anunciante no Firestore Cloud:', error);
+    throw error;
   }
 
   window.dispatchEvent(new CustomEvent('tecconecta:provider_deleted', { detail: { id } }));
@@ -276,15 +500,13 @@ export function clearDemoProviders(): Provider[] {
 
 export function resetDemoProviders(): Provider[] {
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(SEED_PROVIDERS));
+  seedInitialProvidersIfEmpty().catch(console.warn);
   return SEED_PROVIDERS;
 }
 
 // ----------------------------------------------------
 // SPONSORED BANNERS & MONETIZATION MANAGEMENT
 // ----------------------------------------------------
-const LOCAL_STORAGE_BANNERS_KEY = 'tecconecta_sponsored_banners_v1';
-const LOCAL_STORAGE_ADMIN_KEY = 'tecconecta_admin_settings_v1';
-
 export const SEED_BANNERS: SponsoredBanner[] = [
   {
     id: 'banner-seed-1',
@@ -314,6 +536,92 @@ export const SEED_BANNERS: SponsoredBanner[] = [
   }
 ];
 
+function getStoredBanners(): SponsoredBanner[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_BANNERS_KEY);
+    if (raw !== null) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn('Error reading sponsored banners from local storage:', e);
+  }
+  localStorage.setItem(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(SEED_BANNERS));
+  return SEED_BANNERS;
+}
+
+export async function fetchSponsoredBanners(): Promise<SponsoredBanner[]> {
+  try {
+    const snapshot = await getDocs(collection(db, 'banners'));
+    if (!snapshot.empty) {
+      const remoteList: SponsoredBanner[] = [];
+      snapshot.forEach(docSnap => {
+        remoteList.push({ ...docSnap.data(), id: docSnap.id } as SponsoredBanner);
+      });
+      remoteList.sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeB - timeA;
+      });
+      localStorage.setItem(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(remoteList));
+      return remoteList;
+    } else {
+      seedInitialBannersIfEmpty();
+    }
+  } catch (e) {
+    console.warn('[TecConecta] Firestore banner fetch fallback to local:', e);
+  }
+  return getStoredBanners();
+}
+
+export async function saveSponsoredBanner(banner: SponsoredBanner): Promise<SponsoredBanner> {
+  const current = getStoredBanners();
+  const existingIdx = current.findIndex(b => b.id === banner.id);
+  let updatedList: SponsoredBanner[];
+  if (existingIdx >= 0) {
+    updatedList = current.map(b => (b.id === banner.id ? banner : b));
+  } else {
+    updatedList = [banner, ...current];
+  }
+
+  localStorage.setItem(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(updatedList));
+
+  try {
+    const docRef = doc(db, 'banners', banner.id);
+    await setDoc(docRef, sanitizeForFirestore(banner), { merge: true });
+    console.log(`[TecConecta] Banner ${banner.companyName} (${banner.id}) salvo no Firestore Cloud.`);
+  } catch (e) {
+    console.error('[TecConecta] Erro ao salvar banner no Firestore Cloud:', e);
+    throw e;
+  }
+
+  window.dispatchEvent(new CustomEvent('tecconecta:banners_updated', { detail: updatedList }));
+  return banner;
+}
+
+export async function deleteSponsoredBanner(id: string): Promise<boolean> {
+  const current = getStoredBanners();
+  const filtered = current.filter(b => b.id !== id);
+  localStorage.setItem(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(filtered));
+
+  try {
+    const docRef = doc(db, 'banners', id);
+    await deleteDoc(docRef);
+    console.log(`[TecConecta] Banner ${id} removido do Firestore Cloud.`);
+  } catch (e) {
+    console.error('[TecConecta] Erro ao excluir banner no Firestore Cloud:', e);
+    throw e;
+  }
+
+  window.dispatchEvent(new CustomEvent('tecconecta:banners_updated', { detail: filtered }));
+  return true;
+}
+
+// ----------------------------------------------------
+// ADMIN SETTINGS & PLATFORM CONFIGURATION
+// ----------------------------------------------------
 export const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
   admWhatsapp: '64999317499',
   admName: 'Departamento Administrativo TecSoluções',
@@ -322,12 +630,11 @@ export const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
   adminPin: 'admin123'
 };
 
-export function fetchAdminSettings(): AdminSettings {
+function getStoredAdminSettings(): AdminSettings {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_ADMIN_KEY);
     if (raw) {
       const parsed = { ...DEFAULT_ADMIN_SETTINGS, ...JSON.parse(raw) };
-      // Auto-heal placeholder numbers in stored admin settings
       if (parsed.admWhatsapp === '11999999999' || parsed.admWhatsapp.includes('99999999')) {
         parsed.admWhatsapp = '64999317499';
         localStorage.setItem(LOCAL_STORAGE_ADMIN_KEY, JSON.stringify(parsed));
@@ -340,85 +647,22 @@ export function fetchAdminSettings(): AdminSettings {
   return DEFAULT_ADMIN_SETTINGS;
 }
 
-export function saveAdminSettings(settings: AdminSettings): void {
+export function fetchAdminSettings(): AdminSettings {
+  return getStoredAdminSettings();
+}
+
+export async function saveAdminSettings(settings: AdminSettings): Promise<void> {
   localStorage.setItem(LOCAL_STORAGE_ADMIN_KEY, JSON.stringify(settings));
-  window.dispatchEvent(new CustomEvent('tecconecta:admin_settings_updated', { detail: settings }));
-}
 
-export async function fetchSponsoredBanners(): Promise<SponsoredBanner[]> {
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_BANNERS_KEY);
-    if (raw !== null) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        let modified = false;
-        const healed = parsed.map((b: SponsoredBanner) => {
-          if (b.whatsapp === '11999999999' || b.whatsapp.includes('99999999') || b.id === 'banner-seed-1') {
-            modified = true;
-            return {
-              ...b,
-              whatsapp: '64999317499',
-              companyName: b.companyName === 'DaMaceno Soluções Cloud & Dev' ? 'TecSoluções Cloud & IA' : b.companyName
-            };
-          }
-          return b;
-        });
-        if (modified) {
-          localStorage.setItem(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(healed));
-        }
-        return healed;
-      }
-    }
-  } catch (e) {
-    console.warn('Error reading sponsored banners from local storage:', e);
+    const ref = doc(db, 'settings', 'general');
+    await setDoc(ref, sanitizeForFirestore(settings), { merge: true });
+    console.log('[TecConecta] Configurações de administração sincronizadas no Firestore Cloud.');
+  } catch (error) {
+    console.error('[TecConecta] Erro ao sincronizar configurações de administração:', error);
   }
 
-  // Seed default banners only on initial setup when key is not set
-  localStorage.setItem(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(SEED_BANNERS));
-  return SEED_BANNERS;
-}
-
-export async function saveSponsoredBanner(banner: SponsoredBanner): Promise<SponsoredBanner> {
-  const current = await fetchSponsoredBanners();
-  const existingIdx = current.findIndex(b => b.id === banner.id);
-  let updatedList: SponsoredBanner[];
-  if (existingIdx >= 0) {
-    updatedList = current.map(b => (b.id === banner.id ? banner : b));
-  } else {
-    updatedList = [banner, ...current];
-  }
-
-  localStorage.setItem(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(updatedList));
-
-  if (firestoreDb) {
-    try {
-      const { doc, setDoc } = await import('firebase/firestore');
-      await setDoc(doc(firestoreDb, 'banners', banner.id), banner);
-    } catch (e) {
-      console.warn('Firestore banner write fallback to local store:', e);
-    }
-  }
-
-  window.dispatchEvent(new CustomEvent('tecconecta:banners_updated', { detail: updatedList }));
-  return banner;
-}
-
-export async function deleteSponsoredBanner(id: string): Promise<boolean> {
-  const current = await fetchSponsoredBanners();
-  const filtered = current.filter(b => b.id !== id);
-  localStorage.setItem(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(filtered));
-
-  if (firestoreDb) {
-    try {
-      const { doc, deleteDoc } = await import('firebase/firestore');
-      await deleteDoc(doc(firestoreDb, 'banners', id));
-    } catch (e) {
-      console.warn('Firestore banner delete fallback to local store:', e);
-    }
-  }
-
-  window.dispatchEvent(new CustomEvent('tecconecta:banners_updated', { detail: filtered }));
-  return true;
+  window.dispatchEvent(new CustomEvent('tecconecta:admin_settings_updated', { detail: settings }));
 }
 
 // ----------------------------------------------------
@@ -431,15 +675,16 @@ export async function recordProviderClick(id: string): Promise<number> {
   const updatedList = current.map(p => p.id === id ? { ...p, clicksCount: newClicks } : p);
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedList));
 
-  if (firestoreDb) {
-    try {
-      const { doc, updateDoc, increment } = await import('firebase/firestore');
-      await updateDoc(doc(firestoreDb, 'providers', id), {
-        clicksCount: increment(1)
-      });
-    } catch (e) {
-      console.warn('Firestore provider click fallback to local store:', e);
+  try {
+    const docRef = doc(db, 'providers', id);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      await updateDoc(docRef, { clicksCount: increment(1) });
+    } else if (target) {
+      await setDoc(docRef, sanitizeForFirestore({ ...target, clicksCount: newClicks }), { merge: true });
     }
+  } catch (e) {
+    console.warn('[TecConecta] Firestore provider click fallback to local store:', e);
   }
 
   window.dispatchEvent(new CustomEvent('tecconecta:provider_clicked', { detail: { id, clicksCount: newClicks } }));
@@ -447,25 +692,63 @@ export async function recordProviderClick(id: string): Promise<number> {
 }
 
 export async function recordBannerClick(id: string): Promise<number> {
-  const current = await fetchSponsoredBanners();
+  const current = getStoredBanners();
   const target = current.find(b => b.id === id);
   const newClicks = (target?.clicksCount || 0) + 1;
-  const updatedList = current.map(b => b.id === id ? { ...b, clicksCount: newClicks } : b);
+  const updatedList = current.map(b => b.id === id ? { ...b, clicksCount: newClicks } : p => p);
   localStorage.setItem(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(updatedList));
 
-  if (firestoreDb) {
-    try {
-      const { doc, updateDoc, increment } = await import('firebase/firestore');
-      await updateDoc(doc(firestoreDb, 'banners', id), {
-        clicksCount: increment(1)
-      });
-    } catch (e) {
-      console.warn('Firestore banner click fallback to local store:', e);
+  try {
+    const docRef = doc(db, 'banners', id);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      await updateDoc(docRef, { clicksCount: increment(1) });
+    } else if (target) {
+      await setDoc(docRef, sanitizeForFirestore({ ...target, clicksCount: newClicks }), { merge: true });
     }
+  } catch (e) {
+    console.warn('[TecConecta] Firestore banner click fallback to local store:', e);
   }
 
   window.dispatchEvent(new CustomEvent('tecconecta:banners_updated', { detail: updatedList }));
   return newClicks;
+}
+
+// ----------------------------------------------------
+// FORCE CLOUD SYNC ALL (MANUAL OR ON-DEMAND)
+// ----------------------------------------------------
+export async function syncAllLocalToCloud(): Promise<{ providersCount: number; bannersCount: number }> {
+  let providersCount = 0;
+  let bannersCount = 0;
+
+  const localProviders = getStoredProviders();
+  for (const p of localProviders) {
+    try {
+      await setDoc(doc(db, 'providers', p.id), sanitizeForFirestore(p), { merge: true });
+      providersCount++;
+    } catch (e) {
+      console.warn('Sync provider failed:', p.id, e);
+    }
+  }
+
+  const localBanners = getStoredBanners();
+  for (const b of localBanners) {
+    try {
+      await setDoc(doc(db, 'banners', b.id), sanitizeForFirestore(b), { merge: true });
+      bannersCount++;
+    } catch (e) {
+      console.warn('Sync banner failed:', b.id, e);
+    }
+  }
+
+  const localSettings = getStoredAdminSettings();
+  try {
+    await setDoc(doc(db, 'settings', 'general'), sanitizeForFirestore(localSettings), { merge: true });
+  } catch (e) {
+    console.warn('Sync settings failed:', e);
+  }
+
+  return { providersCount, bannersCount };
 }
 
 
