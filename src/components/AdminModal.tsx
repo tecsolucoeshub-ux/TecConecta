@@ -28,7 +28,14 @@ import {
 } from 'lucide-react';
 import { SponsoredBanner, AdminSettings, Provider } from '../types';
 import { CATEGORIES } from '../data/categories';
-import { saveSponsoredBanner, deleteSponsoredBanner, saveAdminSettings, syncAllLocalToCloud } from '../services/firebase';
+import {
+  saveSponsoredBanner,
+  deleteSponsoredBanner,
+  saveAdminSettings,
+  syncAllLocalToCloud,
+  isDemoProvider,
+  clearDemoProviders
+} from '../services/firebase';
 import { ImageUploadField } from './ImageUploadField';
 import { normalizeWhatsAppNumber, validateWhatsAppNumber } from '../utils/whatsapp';
 import { ProjectPresentationModal } from './ProjectPresentationModal';
@@ -41,7 +48,7 @@ interface AdminModalProps {
   providers: Provider[];
   onBannersUpdated: (banners: SponsoredBanner[]) => void;
   onSettingsUpdated: (settings: AdminSettings) => void;
-  onDeleteProvider: (id: string) => void;
+  onDeleteProvider: (id: string) => Promise<void> | void;
   onEditProvider?: (provider: Provider) => void;
   onAuthChange?: (isAuthenticated: boolean) => void;
 }
@@ -295,9 +302,28 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   };
 
   // Delete Provider (safe without iframe-blocked confirm())
-  const handleConfirmDeleteProvider = (id: string) => {
+  const [isConfirmingClearDemo, setIsConfirmingClearDemo] = useState(false);
+  const [isClearingDemo, setIsClearingDemo] = useState(false);
+
+  const handleConfirmDeleteProvider = async (id: string) => {
     setProviderIdToDelete(null);
-    onDeleteProvider(id);
+    try {
+      await onDeleteProvider(id);
+    } catch (err) {
+      console.error('Erro ao excluir prestador:', err);
+    }
+  };
+
+  const handleClearAllDemoProviders = async () => {
+    setIsClearingDemo(true);
+    try {
+      await clearDemoProviders();
+      setIsConfirmingClearDemo(false);
+    } catch (err) {
+      console.error('Erro ao excluir prestadores de exemplo:', err);
+    } finally {
+      setIsClearingDemo(false);
+    }
   };
 
   // Save General Settings
@@ -936,6 +962,48 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                     </div>
                   </div>
 
+                  {/* Banner to remove all fictitious/test providers if any exist */}
+                  {providers.some(isDemoProvider) && (
+                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-2 text-amber-300 text-xs">
+                        <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+                        <span>
+                          Existem <strong>{providers.filter(isDemoProvider).length} anunciantes fictícios/demonstração</strong> na base.
+                        </span>
+                      </div>
+                      {isConfirmingClearDemo ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-red-300 font-bold">Confirmar exclusão?</span>
+                          <button
+                            type="button"
+                            disabled={isClearingDemo}
+                            onClick={handleClearAllDemoProviders}
+                            className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold text-xs transition"
+                          >
+                            {isClearingDemo ? 'Excluindo...' : 'Sim, Excluir da Nuvem'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsConfirmingClearDemo(false)}
+                            className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-gray-300 text-xs transition"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setIsConfirmingClearDemo(true)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-300 text-xs font-bold transition"
+                          title="Excluir de uma vez todos os anunciantes de teste/demonstração da nuvem"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                          <span>Excluir Anunciantes Fictícios ({providers.filter(isDemoProvider).length})</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   {/* Filter & Sorting Controls */}
                   <div className="flex items-center justify-between gap-2 flex-wrap pt-1 pb-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
@@ -1037,6 +1105,11 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-[#25D366] border border-emerald-500/30 flex items-center gap-1">
                                   💬 {p.clicksCount || 0} cliques
                                 </span>
+                                {isDemoProvider(p) && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                    Fictício / Teste
+                                  </span>
+                                )}
                               </div>
                               <div className="text-[11px] text-gray-400 flex items-center gap-2 mt-1 flex-wrap">
                                 <span>📍 {p.city}{p.cep ? ` (CEP: ${p.cep})` : ''}</span>

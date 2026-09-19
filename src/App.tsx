@@ -6,6 +6,8 @@ import {
   subscribeToProviders,
   clearDemoProviders,
   resetDemoProviders,
+  deleteProvider,
+  isDemoProvider,
   fetchSponsoredBanners,
   subscribeToBanners,
   fetchAdminSettings,
@@ -158,6 +160,11 @@ export default function App() {
     const handleProviderDeleted = (event: CustomEvent<{ id: string }>) => {
       setProviders((prev) => prev.filter((p) => p.id !== event.detail.id));
     };
+    const handleDemoCleared = (event: CustomEvent<{ remaining: Provider[] }>) => {
+      if (Array.isArray(event.detail?.remaining)) {
+        setProviders(event.detail.remaining);
+      }
+    };
     const handleBannersUpdated = (event: CustomEvent<SponsoredBanner[]>) => {
       setBanners(event.detail);
     };
@@ -168,6 +175,7 @@ export default function App() {
     window.addEventListener('tecconecta:provider_added' as any, handleProviderAdded);
     window.addEventListener('tecconecta:provider_updated' as any, handleProviderUpdated);
     window.addEventListener('tecconecta:provider_deleted' as any, handleProviderDeleted);
+    window.addEventListener('tecconecta:demo_cleared' as any, handleDemoCleared);
     window.addEventListener('tecconecta:banners_updated' as any, handleBannersUpdated);
     window.addEventListener('tecconecta:admin_settings_updated' as any, handleAdminUpdated);
 
@@ -202,6 +210,7 @@ export default function App() {
       window.removeEventListener('tecconecta:provider_added' as any, handleProviderAdded);
       window.removeEventListener('tecconecta:provider_updated' as any, handleProviderUpdated);
       window.removeEventListener('tecconecta:provider_deleted' as any, handleProviderDeleted);
+      window.removeEventListener('tecconecta:demo_cleared' as any, handleDemoCleared);
       window.removeEventListener('tecconecta:banners_updated' as any, handleBannersUpdated);
       window.removeEventListener('tecconecta:admin_settings_updated' as any, handleAdminUpdated);
       window.removeEventListener('keydown', handleKeyDown);
@@ -248,18 +257,26 @@ export default function App() {
   };
 
   // Clear demo data
-  const handleClearDemoData = () => {
-    const updated = clearDemoProviders();
-    setProviders(updated);
-    setToastMessage('Dados de exemplo removidos. Apenas cadastros reais são exibidos.');
-    setTimeout(() => setToastMessage(null), 4000);
+  const handleClearDemoData = async () => {
+    try {
+      const updated = await clearDemoProviders();
+      setProviders(updated);
+      setToastMessage('Anunciantes fictícios excluídos definitivamente da nuvem.');
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (e) {
+      console.error('Erro ao limpar demo:', e);
+    }
   };
 
-  const handleResetDemoData = () => {
-    const updated = resetDemoProviders();
-    setProviders(updated);
-    setToastMessage('Exemplos de demonstração restaurados.');
-    setTimeout(() => setToastMessage(null), 4000);
+  const handleResetDemoData = async () => {
+    try {
+      const updated = await resetDemoProviders();
+      setProviders(updated);
+      setToastMessage('Exemplos de demonstração restaurados na nuvem.');
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (e) {
+      console.error('Erro ao restaurar demo:', e);
+    }
   };
 
   // Request user GPS (non-intrusive)
@@ -559,14 +576,14 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2 text-xs text-gray-400">
-            {providers.some((p) => p.id.startsWith('seed-')) ? (
+            {providers.some(isDemoProvider) ? (
               <button
                 onClick={handleClearDemoData}
                 title="Mostrar apenas estabelecimentos cadastrados reais"
                 className="text-[11px] text-gray-400 hover:text-red-400 flex items-center gap-1 transition"
               >
                 <Trash2 className="w-3 h-3" />
-                <span className="hidden sm:inline">Ocultar cadastros de teste</span>
+                <span className="hidden sm:inline">Excluir anunciantes fictícios</span>
               </button>
             ) : (
               <button
@@ -816,13 +833,20 @@ export default function App() {
         onBannersUpdated={(updated) => setBanners(updated)}
         onSettingsUpdated={(updated) => setAdminSettings(updated)}
         onAuthChange={setIsAdminAuthenticated}
-        onDeleteProvider={(deletedId) => {
-          setProviders((prev) => prev.filter((p) => p.id !== deletedId));
-          if (selectedProvider?.id === deletedId) {
-            setSelectedProvider(null);
+        onDeleteProvider={async (deletedId) => {
+          try {
+            await deleteProvider(deletedId);
+            setProviders((prev) => prev.filter((p) => p.id !== deletedId));
+            if (selectedProvider?.id === deletedId) {
+              setSelectedProvider(null);
+            }
+            setToastMessage('Perfil excluído definitivamente da nuvem e da base.');
+            setTimeout(() => setToastMessage(null), 4000);
+          } catch (err) {
+            console.error('Erro ao excluir prestador no cloud:', err);
+            setToastMessage('Falha ao excluir perfil da nuvem.');
+            setTimeout(() => setToastMessage(null), 4000);
           }
-          setToastMessage('Perfil excluído pela administração.');
-          setTimeout(() => setToastMessage(null), 4000);
         }}
         onEditProvider={(p) => {
           setProviderToEdit(p);

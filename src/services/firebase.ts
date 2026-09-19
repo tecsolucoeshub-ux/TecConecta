@@ -104,6 +104,94 @@ testConnection().catch(() => {});
 const LOCAL_STORAGE_KEY = 'tecconecta_providers_v1';
 const LOCAL_STORAGE_BANNERS_KEY = 'tecconecta_sponsored_banners_v1';
 const LOCAL_STORAGE_ADMIN_KEY = 'tecconecta_admin_settings_v1';
+const LOCAL_STORAGE_DELETED_KEY = 'tecconecta_deleted_providers_v1';
+const LOCAL_STORAGE_DEMO_CLEARED_KEY = 'tecconecta_demo_cleared_v1';
+
+// Known initial demo/mock provider IDs
+export const DEMO_PROVIDER_IDS = new Set<string>([
+  'prov-001', 'prov-002', 'prov-003', 'prov-004', 'prov-005',
+  'prov-006', 'prov-007', 'prov-008', 'prov-009', 'prov-010'
+]);
+
+/**
+ * Checks if a provider is an example/demo mock advertiser
+ */
+export function isDemoProvider(p: { id: string } | null | undefined): boolean {
+  if (!p || !p.id) return false;
+  // TecSoluções is the official company profile - NOT a mock advertiser
+  if (p.id === 'prov-tecsolucoes') return false;
+  if (DEMO_PROVIDER_IDS.has(p.id)) return true;
+  if (p.id.startsWith('seed-') || p.id.startsWith('demo-')) return true;
+  if (/^prov-0\d+$/.test(p.id)) return true;
+  return false;
+}
+
+/**
+ * Retrieves the set of permanently deleted provider IDs
+ */
+export function getDeletedProviderIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_DELETED_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return new Set<string>(parsed);
+      }
+    }
+  } catch (e) {
+    console.warn('Error reading deleted provider ids:', e);
+  }
+  return new Set<string>();
+}
+
+/**
+ * Permanently records a provider ID as deleted locally and in Firestore
+ */
+export async function markProviderAsDeleted(id: string): Promise<void> {
+  const set = getDeletedProviderIds();
+  set.add(id);
+  const arr = Array.from(set);
+  localStorage.setItem(LOCAL_STORAGE_DELETED_KEY, JSON.stringify(arr));
+
+  try {
+    await setDoc(doc(db, 'settings', 'deleted_providers'), {
+      ids: arr,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  } catch (err) {
+    console.warn('[TecConecta] Falha ao registrar id excluído no Firestore:', err);
+  }
+}
+
+/**
+ * Unmarks a provider as deleted (used when re-creating/saving with same ID)
+ */
+export function unmarkProviderAsDeleted(id: string): void {
+  const set = getDeletedProviderIds();
+  if (set.has(id)) {
+    set.delete(id);
+    localStorage.setItem(LOCAL_STORAGE_DELETED_KEY, JSON.stringify(Array.from(set)));
+  }
+}
+
+/**
+ * Synchronizes deleted provider IDs list from Firestore Cloud
+ */
+export async function syncDeletedIdsFromCloud(): Promise<void> {
+  try {
+    const docSnap = await getDoc(doc(db, 'settings', 'deleted_providers'));
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      if (Array.isArray(data?.ids)) {
+        const localSet = getDeletedProviderIds();
+        data.ids.forEach((id: string) => localSet.add(id));
+        localStorage.setItem(LOCAL_STORAGE_DELETED_KEY, JSON.stringify(Array.from(localSet)));
+      }
+    }
+  } catch (err) {
+    console.warn('[TecConecta] Could not sync deleted provider IDs from cloud:', err);
+  }
+}
 
 // Helper to remove any duplicate provider instances and normalize phone numbers
 export function deduplicateProviders(list: Provider[]): Provider[] {
@@ -148,25 +236,38 @@ export function deduplicateProviders(list: Provider[]): Provider[] {
   });
 }
 
-// Synchronous local state loader
+// Synchronous local state loader with strict deleted-ID filtering
 export function getStoredProviders(): Provider[] {
   try {
+    const deletedIds = getDeletedProviderIds();
+    const isDemoCleared = localStorage.getItem(LOCAL_STORAGE_DEMO_CLEARED_KEY) === 'true';
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(SEED_PROVIDERS));
-      return SEED_PROVIDERS;
+
+    if (raw !== null) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const filtered = parsed.filter((p: Provider) => {
+          if (!p || !p.id) return false;
+          if (deletedIds.has(p.id)) return false;
+          if (isDemoCleared && isDemoProvider(p)) return false;
+          return true;
+        });
+        const unique = deduplicateProviders(filtered);
+        return unique;
+      }
     }
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(SEED_PROVIDERS));
-      return SEED_PROVIDERS;
+
+    // First visit ever on a clean browser: only seed initial if demo was never cleared
+    if (!isDemoCleared) {
+      const initial = SEED_PROVIDERS.filter((p) => !deletedIds.has(p.id));
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(initial));
+      return initial;
     }
-    const unique = deduplicateProviders(parsed);
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(unique));
-    return unique;
+
+    return [];
   } catch (err) {
-    console.warn('Could not read from localStorage, using seed providers:', err);
-    return SEED_PROVIDERS;
+    console.warn('Could not read from localStorage, using empty providers:', err);
+    return [];
   }
 }
 
@@ -194,6 +295,20 @@ export function sanitizeForFirestore(data: any): any {
 let isSeedingProviders = false;
 async function seedInitialProvidersIfEmpty() {
   if (isSeedingProviders) return;
+  const isDemoCleared = localStorage.getItem(LOCAL_STORAGE_DEMO_CLEARED_KEY) === 'true';
+  if (isDemoCleared) {
+    // If demo has been cleared, only ensure TecSoluções official profile is present
+    try {
+      const tecSolucoes = SEED_PROVIDERS.find(p => p.id === 'prov-tecsolucoes');
+      if (tecSolucoes) {
+        await setDoc(doc(db, 'providers', tecSolucoes.id), sanitizeForFirestore(tecSolucoes), { merge: true });
+      }
+    } catch (e) {
+      console.warn('Could not seed official profile:', e);
+    }
+    return;
+  }
+
   isSeedingProviders = true;
   try {
     console.log('[TecConecta] Base de prestadores na nuvem vazia. Semeando prestadores verificados iniciais...');
@@ -241,17 +356,23 @@ export function subscribeToProviders(
 ): () => void {
   // Emit local cache immediately for zero-delay UI rendering
   const cached = getStoredProviders();
-  if (cached.length > 0) {
-    callback(cached);
-  }
+  callback(cached);
 
   const providersRef = collection(db, 'providers');
+
+  // Asynchronously synchronize deleted provider IDs so this client never resurrects them
+  syncDeletedIdsFromCloud();
 
   const unsubscribe = onSnapshot(
     providersRef,
     (snapshot) => {
+      const deletedIds = getDeletedProviderIds();
+      const isDemoCleared = localStorage.getItem(LOCAL_STORAGE_DEMO_CLEARED_KEY) === 'true';
+
       if (snapshot.empty) {
-        seedInitialProvidersIfEmpty();
+        if (!isDemoCleared) {
+          seedInitialProvidersIfEmpty();
+        }
         callback(getStoredProviders());
         return;
       }
@@ -259,7 +380,12 @@ export function subscribeToProviders(
       const remoteList: Provider[] = [];
       snapshot.forEach((docSnap) => {
         const data = docSnap.data() as Provider;
-        remoteList.push({ ...data, id: docSnap.id });
+        const id = docSnap.id;
+        // Never restore if marked as deleted or if demo was cleared and is a demo provider
+        if (deletedIds.has(id)) return;
+        if (isDemoCleared && isDemoProvider({ id })) return;
+
+        remoteList.push({ ...data, id });
       });
 
       // Sort by createdAt descending
@@ -273,12 +399,17 @@ export function subscribeToProviders(
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(unique));
       callback(unique);
 
-      // Auto-heal: Check if this device has any local user-created advertiser not yet in the cloud
-      const remoteIds = new Set(snapshot.docs.map(d => d.id));
-      const unsyncedLocals = cached.filter(p => !remoteIds.has(p.id) && !p.id.startsWith('seed-'));
+      // Auto-heal: ONLY sync genuine user-created local profiles (never demo, never deleted)
+      const remoteIds = new Set(snapshot.docs.map((d) => d.id));
+      const unsyncedLocals = cached.filter(
+        (p) =>
+          !remoteIds.has(p.id) &&
+          !deletedIds.has(p.id) &&
+          !isDemoProvider(p)
+      );
       if (unsyncedLocals.length > 0) {
         console.log(`[TecConecta] Sincronizando ${unsyncedLocals.length} anunciantes locais pendentes com a nuvem...`);
-        unsyncedLocals.forEach(p => {
+        unsyncedLocals.forEach((p) => {
           setDoc(doc(db, 'providers', p.id), sanitizeForFirestore(p), { merge: true }).catch(console.warn);
         });
       }
@@ -408,6 +539,7 @@ export async function saveProvider(provider: Provider): Promise<Provider> {
   }
 
   // 1. Immediately update local storage for optimistic responsiveness
+  unmarkProviderAsDeleted(provider.id);
   const current = getStoredProviders();
   const cleanPhone = (provider.whatsapp || '').replace(/\D/g, '');
   const cleanName = (provider.name || '').trim().toLowerCase();
@@ -474,14 +606,19 @@ export async function updateProvider(id: string, updates: Partial<Provider>): Pr
 }
 
 export async function deleteProvider(id: string): Promise<boolean> {
+  // 1. Remove from local cache immediately
   const current = getStoredProviders();
   const filtered = current.filter(p => p.id !== id);
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(filtered));
 
+  // 2. Permanently record as deleted (local set and cloud tombstone)
+  await markProviderAsDeleted(id);
+
+  // 3. Delete document from Firestore Cloud
   try {
     const docRef = doc(db, 'providers', id);
     await deleteDoc(docRef);
-    console.log(`[TecConecta] Anunciante ${id} removido do Firestore Cloud.`);
+    console.log(`[TecConecta] Anunciante ${id} removido definitivamente do Firestore Cloud.`);
   } catch (error) {
     console.error('[TecConecta] Erro ao remover anunciante no Firestore Cloud:', error);
     throw error;
@@ -491,17 +628,84 @@ export async function deleteProvider(id: string): Promise<boolean> {
   return true;
 }
 
-export function clearDemoProviders(): Provider[] {
+/**
+ * Permanently removes all fictitious/demo advertisers from local storage and Firestore Cloud.
+ */
+export async function clearDemoProviders(): Promise<Provider[]> {
+  localStorage.setItem(LOCAL_STORAGE_DEMO_CLEARED_KEY, 'true');
   const current = getStoredProviders();
-  const filtered = current.filter(p => !p.id.startsWith('seed-'));
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(filtered));
-  return filtered;
+
+  // Find all demo provider IDs to delete
+  const demoIdsToDelete = new Set<string>();
+  current.forEach((p) => {
+    if (isDemoProvider(p)) demoIdsToDelete.add(p.id);
+  });
+  SEED_PROVIDERS.forEach((p) => {
+    if (isDemoProvider(p)) demoIdsToDelete.add(p.id);
+  });
+
+  // Mark all as deleted locally & cloud
+  const localDeleted = getDeletedProviderIds();
+  demoIdsToDelete.forEach((id) => localDeleted.add(id));
+  localStorage.setItem(LOCAL_STORAGE_DELETED_KEY, JSON.stringify(Array.from(localDeleted)));
+
+  const remaining = current.filter((p) => !demoIdsToDelete.has(p.id));
+  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(remaining));
+
+  // Asynchronously delete all demo docs from Firestore
+  try {
+    const deletePromises = Array.from(demoIdsToDelete).map((id) =>
+      deleteDoc(doc(db, 'providers', id)).catch((err) => {
+        console.warn(`[TecConecta] Erro ao excluir doc demo ${id}:`, err);
+      })
+    );
+    await Promise.all(deletePromises);
+
+    await setDoc(doc(db, 'settings', 'deleted_providers'), {
+      ids: Array.from(localDeleted),
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+
+    console.log(`[TecConecta] ${demoIdsToDelete.size} anunciantes fictícios excluídos com sucesso da nuvem.`);
+  } catch (err) {
+    console.warn('[TecConecta] Erro ao sincronizar remoção de demo com Firestore:', err);
+  }
+
+  window.dispatchEvent(new CustomEvent('tecconecta:demo_cleared', { detail: { remaining } }));
+  return remaining;
 }
 
-export function resetDemoProviders(): Provider[] {
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(SEED_PROVIDERS));
-  seedInitialProvidersIfEmpty().catch(console.warn);
-  return SEED_PROVIDERS;
+/**
+ * Restores sample demonstration providers if requested by the user
+ */
+export async function resetDemoProviders(): Promise<Provider[]> {
+  localStorage.removeItem(LOCAL_STORAGE_DEMO_CLEARED_KEY);
+  const deletedSet = getDeletedProviderIds();
+
+  // Unmark demo IDs from deletion
+  SEED_PROVIDERS.forEach((p) => {
+    deletedSet.delete(p.id);
+  });
+  localStorage.setItem(LOCAL_STORAGE_DELETED_KEY, JSON.stringify(Array.from(deletedSet)));
+
+  const current = getStoredProviders();
+  const combined = deduplicateProviders([...current, ...SEED_PROVIDERS]);
+  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(combined));
+
+  // Re-seed to Firestore
+  try {
+    for (const p of SEED_PROVIDERS) {
+      await setDoc(doc(db, 'providers', p.id), sanitizeForFirestore(p), { merge: true });
+    }
+    await setDoc(doc(db, 'settings', 'deleted_providers'), {
+      ids: Array.from(deletedSet),
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  } catch (err) {
+    console.warn('[TecConecta] Erro ao restaurar demonstracao na nuvem:', err);
+  }
+
+  return combined;
 }
 
 // ----------------------------------------------------
@@ -541,7 +745,7 @@ function getStoredBanners(): SponsoredBanner[] {
     const raw = localStorage.getItem(LOCAL_STORAGE_BANNERS_KEY);
     if (raw !== null) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed;
       }
     }
