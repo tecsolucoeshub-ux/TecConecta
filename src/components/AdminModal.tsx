@@ -107,6 +107,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
   // New Banner Form State
   const [isCreatingBanner, setIsCreatingBanner] = useState(false);
+  const [editingBannerId, setEditingBannerId] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState('');
   const [headline, setHeadline] = useState('');
   const [subtext, setSubtext] = useState('');
@@ -236,6 +237,31 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   };
 
   // Create Banner
+  const handleCancelBannerForm = () => {
+    setIsCreatingBanner(false);
+    setEditingBannerId(null);
+    setCompanyName('');
+    setHeadline('');
+    setSubtext('');
+    setBannerWhatsapp('');
+    setBadgeText('Empresa Patrocinada');
+    setCategory('');
+    setBannerImageUrl('');
+  };
+
+  const handleStartEditBanner = (b: SponsoredBanner) => {
+    setEditingBannerId(b.id);
+    setCompanyName(b.companyName);
+    setHeadline(b.headline);
+    setSubtext(b.subtext || '');
+    setBannerWhatsapp(b.whatsapp);
+    setBadgeText(b.badgeText || 'Patrocinador Oficial');
+    setCategory(b.category || '');
+    setBannerImageUrl(b.imageUrl || '');
+    setIsCreatingBanner(true);
+    setActiveTab('banners');
+  };
+
   const handleCreateBanner = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyName.trim() || !headline.trim() || !bannerWhatsapp.trim()) {
@@ -251,35 +277,30 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
     setBannerSaving(true);
     try {
-      const newBanner: SponsoredBanner = {
-        id: `banner-${Date.now()}`,
+      const existing = editingBannerId ? banners.find(b => b.id === editingBannerId) : null;
+      const bannerToSave: SponsoredBanner = {
+        id: editingBannerId || `banner-${Date.now()}`,
         companyName: companyName.trim(),
         headline: headline.trim(),
         subtext: subtext.trim() || 'Entre em contato pelo WhatsApp.',
         whatsapp: val.normalized,
-        badgeText: badgeText.trim() || 'Patrocinador',
+        badgeText: badgeText.trim() || 'Patrocinador Oficial',
         category: category.trim() || 'Comércio Local',
         imageUrl: bannerImageUrl.trim() || undefined,
-        active: true,
-        createdAt: new Date().toISOString()
+        active: existing ? existing.active : true,
+        clicksCount: existing?.clicksCount || 0,
+        createdAt: existing?.createdAt || new Date().toISOString()
       };
 
-      await saveSponsoredBanner(newBanner);
-      const updated = [newBanner, ...banners];
+      await saveSponsoredBanner(bannerToSave);
+      const updated = editingBannerId
+        ? banners.map(b => (b.id === editingBannerId ? bannerToSave : b))
+        : [bannerToSave, ...banners];
       onBannersUpdated(updated);
-      setIsCreatingBanner(false);
-
-      // Reset form
-      setCompanyName('');
-      setHeadline('');
-      setSubtext('');
-      setBannerWhatsapp('');
-      setBadgeText('Empresa Patrocinada');
-      setCategory('');
-      setBannerImageUrl('');
+      handleCancelBannerForm();
     } catch (e) {
       console.error(e);
-      alert('Erro ao criar banner patrocinado.');
+      alert('Erro ao salvar banner patrocinado.');
     } finally {
       setBannerSaving(false);
     }
@@ -740,6 +761,26 @@ export const AdminModal: React.FC<AdminModalProps> = ({
               {/* Tab 1: Sponsored Banners Management */}
               {activeTab === 'banners' && (
                 <div className="space-y-4">
+                  {/* Dual Slot Explanatory Callout */}
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-[#FF6B00]/15 to-[#00E5FF]/15 border border-white/10 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-[#FF6B00]/20 border border-[#FF6B00]/40 flex items-center justify-center text-[#FF6B00] shrink-0">
+                        <Sparkles className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-white font-['Outfit'] block">
+                          2 Banners em Exibição Simultânea no Topo
+                        </span>
+                        <span className="text-[10.5px] text-gray-400">
+                          A tela divide o topo em Slot 1 e Slot 2 (lado a lado sem aumentar a altura). Se houver mais de 2, eles rotacionam automaticamente.
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/30 shrink-0">
+                      Dual Slot Ativo
+                    </span>
+                  </div>
+
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="text-sm font-bold text-white font-['Outfit']">
@@ -751,7 +792,13 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                     </div>
 
                     <button
-                      onClick={() => setIsCreatingBanner(!isCreatingBanner)}
+                      onClick={() => {
+                        if (isCreatingBanner) {
+                          handleCancelBannerForm();
+                        } else {
+                          setIsCreatingBanner(true);
+                        }
+                      }}
                       className="px-3.5 py-2 rounded-xl bg-[#00E5FF] text-[#0B132B] font-bold text-xs font-['Outfit'] flex items-center gap-1.5 hover:bg-[#00E5FF]/90 transition shrink-0"
                     >
                       <Plus className="w-3.5 h-3.5" />
@@ -759,12 +806,12 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                     </button>
                   </div>
 
-                  {/* Create New Banner Form */}
+                  {/* Create / Edit Banner Form */}
                   {isCreatingBanner && (
                     <form onSubmit={handleCreateBanner} className="p-4 rounded-xl bg-white/5 border border-[#00E5FF]/40 space-y-3">
                       <h4 className="text-xs font-bold text-[#00E5FF] uppercase tracking-wider flex items-center gap-1.5">
                         <Sparkles className="w-3.5 h-3.5" />
-                        Cadastrar Empresa Patrocinada
+                        {editingBannerId ? `Editar Patrocinador: ${companyName || 'Selecionado'}` : 'Cadastrar Empresa Patrocinada'}
                       </h4>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -856,18 +903,18 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                       <div className="flex justify-end gap-2 pt-2">
                         <button
                           type="button"
-                          onClick={() => setIsCreatingBanner(false)}
-                          className="px-3 py-1.5 rounded-lg bg-white/10 text-xs text-gray-300"
+                          onClick={handleCancelBannerForm}
+                          className="px-3 py-1.5 rounded-lg bg-white/10 text-xs text-gray-300 hover:bg-white/15 transition"
                         >
                           Cancelar
                         </button>
                         <button
                           type="submit"
                           disabled={bannerSaving}
-                          className="px-4 py-1.5 rounded-lg bg-[#FF6B00] text-white font-bold text-xs flex items-center gap-1"
+                          className="px-4 py-1.5 rounded-lg bg-[#FF6B00] hover:bg-[#FF6B00]/90 text-white font-bold text-xs flex items-center gap-1 shadow-sm transition"
                         >
                           <Check className="w-3.5 h-3.5" />
-                          <span>{bannerSaving ? 'Salvando...' : 'Cadastrar e Ativar Banner'}</span>
+                          <span>{bannerSaving ? 'Salvando...' : editingBannerId ? 'Salvar Alterações' : 'Cadastrar e Ativar Banner'}</span>
                         </button>
                       </div>
                     </form>
@@ -918,6 +965,15 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                           </div>
 
                           <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              onClick={() => handleStartEditBanner(b)}
+                              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#FF6B00]/20 hover:bg-[#FF6B00]/30 text-[#FF6B00] border border-[#FF6B00]/35 flex items-center gap-1 transition"
+                              title="Editar este banner"
+                            >
+                              <Edit3 className="w-3 h-3" />
+                              <span>Editar</span>
+                            </button>
+
                             <button
                               onClick={() => handleToggleBanner(b)}
                               className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/10 hover:bg-white/20 text-white"
