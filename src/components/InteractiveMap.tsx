@@ -215,6 +215,16 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     markersLayer.clearLayers();
 
     providers.forEach((provider) => {
+      if (
+        !provider ||
+        typeof provider.lat !== 'number' ||
+        typeof provider.lng !== 'number' ||
+        isNaN(provider.lat) ||
+        isNaN(provider.lng)
+      ) {
+        return;
+      }
+
       const isSelected = selectedProvider?.id === provider.id;
       const photoUrl = getProviderPhoto(provider.imageUrl, provider.category, provider.name);
       

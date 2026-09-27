@@ -34,6 +34,15 @@ export class ErrorBoundary extends React.Component<Props, State> {
     this.setState({ hasError: false, error: undefined });
   };
 
+  private handleCleanReload = () => {
+    try {
+      localStorage.removeItem('tecconecta_providers_v1');
+      localStorage.removeItem('tecconecta_sponsored_banners_v1');
+      sessionStorage.clear();
+    } catch {}
+    window.location.reload();
+  };
+
   public render() {
     if (this.state.hasError) {
       return (
@@ -64,17 +73,17 @@ export class ErrorBoundary extends React.Component<Props, State> {
               <button
                 type="button"
                 onClick={this.handleReset}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-white/10 hover:bg-white/15 text-white font-semibold text-xs transition border border-white/10"
+                className="flex-1 py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-semibold text-xs transition border border-white/10"
               >
                 Tentar Novamente
               </button>
               <button
                 type="button"
-                onClick={this.handleReload}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#00E5FF] to-[#FF6B00] text-[#0B132B] font-extrabold text-xs transition hover:brightness-110 flex items-center justify-center gap-1.5 shadow-[0_0_20px_rgba(0,229,255,0.3)]"
+                onClick={this.handleCleanReload}
+                className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#00E5FF] to-[#FF6B00] text-[#0B132B] font-extrabold text-xs transition hover:brightness-110 flex items-center justify-center gap-1.5 shadow-[0_0_20px_rgba(0,229,255,0.3)]"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                <span>Recarregar App</span>
+                <span>Reiniciar Limpo</span>
               </button>
             </div>
           </div>

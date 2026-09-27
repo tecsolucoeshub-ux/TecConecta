@@ -107,6 +107,36 @@ const LOCAL_STORAGE_ADMIN_KEY = 'tecconecta_admin_settings_v1';
 const LOCAL_STORAGE_DELETED_KEY = 'tecconecta_deleted_providers_v1';
 const LOCAL_STORAGE_DEMO_CLEARED_KEY = 'tecconecta_demo_cleared_v1';
 
+/**
+ * Safe localStorage setter with automatic QuotaExceededError protection and base64 trimming.
+ * Guarantees that mobile browsers (Chrome, Safari, Android WebViews) NEVER crash or throw unhandled exceptions
+ * when local storage limit (5MB) is reached.
+ */
+export function safeLocalStorageSet(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch (err) {
+    console.warn(`[TecConecta] localStorage.setItem protegido contra estouro de quota (${key}):`, err);
+    try {
+      if (key === LOCAL_STORAGE_KEY) {
+        // Strip heavy base64 data URIs from offline cache to keep it under 50KB
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) {
+          const lightweight = parsed.map((item: any) => {
+            if (item && item.imageUrl && item.imageUrl.startsWith('data:')) {
+              return { ...item, imageUrl: undefined };
+            }
+            return item;
+          });
+          localStorage.setItem(key, JSON.stringify(lightweight));
+        }
+      }
+    } catch {
+      // Gracefully continue in memory
+    }
+  }
+}
+
 // Known initial demo/mock provider IDs
 export const DEMO_PROVIDER_IDS = new Set<string>([
   'prov-001', 'prov-002', 'prov-003', 'prov-004', 'prov-005',
@@ -151,7 +181,7 @@ export async function markProviderAsDeleted(id: string): Promise<void> {
   const set = getDeletedProviderIds();
   set.add(id);
   const arr = Array.from(set);
-  localStorage.setItem(LOCAL_STORAGE_DELETED_KEY, JSON.stringify(arr));
+  safeLocalStorageSet(LOCAL_STORAGE_DELETED_KEY, JSON.stringify(arr));
 
   try {
     await setDoc(doc(db, 'settings', 'deleted_providers'), {
@@ -170,7 +200,7 @@ export function unmarkProviderAsDeleted(id: string): void {
   const set = getDeletedProviderIds();
   if (set.has(id)) {
     set.delete(id);
-    localStorage.setItem(LOCAL_STORAGE_DELETED_KEY, JSON.stringify(Array.from(set)));
+    safeLocalStorageSet(LOCAL_STORAGE_DELETED_KEY, JSON.stringify(Array.from(set)));
   }
 }
 
@@ -185,7 +215,7 @@ export async function syncDeletedIdsFromCloud(): Promise<void> {
       if (Array.isArray(data?.ids)) {
         const localSet = getDeletedProviderIds();
         data.ids.forEach((id: string) => localSet.add(id));
-        localStorage.setItem(LOCAL_STORAGE_DELETED_KEY, JSON.stringify(Array.from(localSet)));
+        safeLocalStorageSet(LOCAL_STORAGE_DELETED_KEY, JSON.stringify(Array.from(localSet)));
       }
     }
   } catch (err) {
@@ -254,7 +284,7 @@ export function getStoredProviders(): Provider[] {
     // First visit ever on a clean browser: only seed initial if demo was never cleared
     if (!isDemoCleared) {
       const initial = SEED_PROVIDERS.filter((p) => !deletedIds.has(p.id));
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(initial));
+      safeLocalStorageSet(LOCAL_STORAGE_KEY, JSON.stringify(initial));
       return initial;
     }
 
@@ -390,7 +420,7 @@ export function subscribeToProviders(
       });
 
       const unique = deduplicateProviders(remoteList);
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(unique));
+      safeLocalStorageSet(LOCAL_STORAGE_KEY, JSON.stringify(unique));
       callback(unique);
 
       // Auto-heal: ONLY sync genuine user-created local profiles (never demo, never deleted)
@@ -453,7 +483,7 @@ export function subscribeToBanners(
         return timeB - timeA;
       });
 
-      localStorage.setItem(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(remoteList));
+      safeLocalStorageSet(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(remoteList));
       callback(remoteList);
     },
     (error) => {
@@ -482,7 +512,7 @@ export function subscribeToAdminSettings(
     (docSnap) => {
       if (docSnap.exists()) {
         const remote = { ...DEFAULT_ADMIN_SETTINGS, ...(docSnap.data() as AdminSettings) };
-        localStorage.setItem(LOCAL_STORAGE_ADMIN_KEY, JSON.stringify(remote));
+        safeLocalStorageSet(LOCAL_STORAGE_ADMIN_KEY, JSON.stringify(remote));
         callback(remote);
       } else {
         // Initialize default in Firestore
@@ -515,7 +545,7 @@ export async function fetchProviders(): Promise<Provider[]> {
         return timeB - timeA;
       });
       const unique = deduplicateProviders(remoteList);
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(unique));
+      safeLocalStorageSet(LOCAL_STORAGE_KEY, JSON.stringify(unique));
       return unique;
     } else {
       seedInitialProvidersIfEmpty();
@@ -540,17 +570,20 @@ export async function saveProvider(provider: Provider): Promise<Provider> {
   const cleanCity = (provider.city || '').trim().toLowerCase();
 
   const filtered = current.filter((p) => {
+    if (!p || !p.id) return false;
     if (p.id === provider.id) return false;
     const pPhone = (p.whatsapp || '').replace(/\D/g, '');
-    if (cleanPhone && pPhone && cleanPhone === pPhone) return false;
-    if (cleanName && cleanCity && p.name.trim().toLowerCase() === cleanName && p.city.trim().toLowerCase() === cleanCity) {
+    if (cleanPhone && cleanPhone.length >= 10 && pPhone && cleanPhone === pPhone) return false;
+    const pName = (p.name || '').trim().toLowerCase();
+    const pCity = (p.city || '').trim().toLowerCase();
+    if (cleanName && cleanCity && pName && pCity && pName === cleanName && pCity === cleanCity) {
       return false;
     }
     return true;
   });
 
   const updated = deduplicateProviders([provider, ...filtered]);
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+  safeLocalStorageSet(LOCAL_STORAGE_KEY, JSON.stringify(updated));
 
   // 2. Persist to Firestore CLOUD with await and strict error catching
   try {
@@ -584,7 +617,7 @@ export async function updateProvider(id: string, updates: Partial<Provider>): Pr
   };
 
   const updatedList = current.map(p => (p.id === id ? updated : p));
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedList));
+  safeLocalStorageSet(LOCAL_STORAGE_KEY, JSON.stringify(updatedList));
 
   try {
     const docRef = doc(db, 'providers', id);
@@ -603,7 +636,7 @@ export async function deleteProvider(id: string): Promise<boolean> {
   // 1. Remove from local cache immediately
   const current = getStoredProviders();
   const filtered = current.filter(p => p.id !== id);
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(filtered));
+  safeLocalStorageSet(LOCAL_STORAGE_KEY, JSON.stringify(filtered));
 
   // 2. Permanently record as deleted (local set and cloud tombstone)
   await markProviderAsDeleted(id);
@@ -626,7 +659,7 @@ export async function deleteProvider(id: string): Promise<boolean> {
  * Permanently removes all fictitious/demo advertisers from local storage and Firestore Cloud.
  */
 export async function clearDemoProviders(): Promise<Provider[]> {
-  localStorage.setItem(LOCAL_STORAGE_DEMO_CLEARED_KEY, 'true');
+  safeLocalStorageSet(LOCAL_STORAGE_DEMO_CLEARED_KEY, 'true');
   const current = getStoredProviders();
 
   // Find all demo provider IDs to delete
@@ -641,10 +674,10 @@ export async function clearDemoProviders(): Promise<Provider[]> {
   // Mark all as deleted locally & cloud
   const localDeleted = getDeletedProviderIds();
   demoIdsToDelete.forEach((id) => localDeleted.add(id));
-  localStorage.setItem(LOCAL_STORAGE_DELETED_KEY, JSON.stringify(Array.from(localDeleted)));
+  safeLocalStorageSet(LOCAL_STORAGE_DELETED_KEY, JSON.stringify(Array.from(localDeleted)));
 
   const remaining = current.filter((p) => !demoIdsToDelete.has(p.id));
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(remaining));
+  safeLocalStorageSet(LOCAL_STORAGE_KEY, JSON.stringify(remaining));
 
   // Asynchronously delete all demo docs from Firestore
   try {
@@ -680,11 +713,11 @@ export async function resetDemoProviders(): Promise<Provider[]> {
   SEED_PROVIDERS.forEach((p) => {
     deletedSet.delete(p.id);
   });
-  localStorage.setItem(LOCAL_STORAGE_DELETED_KEY, JSON.stringify(Array.from(deletedSet)));
+  safeLocalStorageSet(LOCAL_STORAGE_DELETED_KEY, JSON.stringify(Array.from(deletedSet)));
 
   const current = getStoredProviders();
   const combined = deduplicateProviders([...current, ...SEED_PROVIDERS]);
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(combined));
+  safeLocalStorageSet(LOCAL_STORAGE_KEY, JSON.stringify(combined));
 
   // Re-seed to Firestore
   try {
@@ -746,7 +779,7 @@ function getStoredBanners(): SponsoredBanner[] {
   } catch (e) {
     console.warn('Error reading sponsored banners from local storage:', e);
   }
-  localStorage.setItem(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(SEED_BANNERS));
+  safeLocalStorageSet(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(SEED_BANNERS));
   return SEED_BANNERS;
 }
 
@@ -763,7 +796,7 @@ export async function fetchSponsoredBanners(): Promise<SponsoredBanner[]> {
         const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return timeB - timeA;
       });
-      localStorage.setItem(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(remoteList));
+      safeLocalStorageSet(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(remoteList));
       return remoteList;
     } else {
       seedInitialBannersIfEmpty();
@@ -784,7 +817,7 @@ export async function saveSponsoredBanner(banner: SponsoredBanner): Promise<Spon
     updatedList = [banner, ...current];
   }
 
-  localStorage.setItem(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(updatedList));
+  safeLocalStorageSet(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(updatedList));
 
   try {
     const docRef = doc(db, 'banners', banner.id);
@@ -802,7 +835,7 @@ export async function saveSponsoredBanner(banner: SponsoredBanner): Promise<Spon
 export async function deleteSponsoredBanner(id: string): Promise<boolean> {
   const current = getStoredBanners();
   const filtered = current.filter(b => b.id !== id);
-  localStorage.setItem(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(filtered));
+  safeLocalStorageSet(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(filtered));
 
   try {
     const docRef = doc(db, 'banners', id);
@@ -835,7 +868,7 @@ function getStoredAdminSettings(): AdminSettings {
       const parsed = { ...DEFAULT_ADMIN_SETTINGS, ...JSON.parse(raw) };
       if (parsed.admWhatsapp === '11999999999' || parsed.admWhatsapp.includes('99999999')) {
         parsed.admWhatsapp = '64999317499';
-        localStorage.setItem(LOCAL_STORAGE_ADMIN_KEY, JSON.stringify(parsed));
+        safeLocalStorageSet(LOCAL_STORAGE_ADMIN_KEY, JSON.stringify(parsed));
       }
       return parsed;
     }
@@ -850,7 +883,7 @@ export function fetchAdminSettings(): AdminSettings {
 }
 
 export async function saveAdminSettings(settings: AdminSettings): Promise<void> {
-  localStorage.setItem(LOCAL_STORAGE_ADMIN_KEY, JSON.stringify(settings));
+  safeLocalStorageSet(LOCAL_STORAGE_ADMIN_KEY, JSON.stringify(settings));
 
   try {
     const ref = doc(db, 'settings', 'general');
@@ -871,7 +904,7 @@ export async function recordProviderClick(id: string): Promise<number> {
   const target = current.find(p => p.id === id);
   const newClicks = (target?.clicksCount || 0) + 1;
   const updatedList = current.map(p => p.id === id ? { ...p, clicksCount: newClicks } : p);
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedList));
+  safeLocalStorageSet(LOCAL_STORAGE_KEY, JSON.stringify(updatedList));
 
   try {
     const docRef = doc(db, 'providers', id);
@@ -894,7 +927,7 @@ export async function recordBannerClick(id: string): Promise<number> {
   const target = current.find(b => b.id === id);
   const newClicks = (target?.clicksCount || 0) + 1;
   const updatedList = current.map(b => b.id === id ? { ...b, clicksCount: newClicks } : p => p);
-  localStorage.setItem(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(updatedList));
+  safeLocalStorageSet(LOCAL_STORAGE_BANNERS_KEY, JSON.stringify(updatedList));
 
   try {
     const docRef = doc(db, 'banners', id);

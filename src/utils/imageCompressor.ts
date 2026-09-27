@@ -4,7 +4,7 @@
  * ensuring snappy load times, mobile compatibility, and minimal storage footprints.
  */
 
-export function compressImageFile(file: File, maxDimension = 720, quality = 0.78): Promise<string> {
+export function compressImageFile(file: File, maxDimension = 640, quality = 0.72): Promise<string> {
   return new Promise((resolve, reject) => {
     // Check MIME type or common image extensions (for mobile browsers where file.type might be empty or image/heic)
     const isImageMime = file.type && file.type.startsWith('image/');
@@ -20,33 +20,40 @@ export function compressImageFile(file: File, maxDimension = 720, quality = 0.78
       const img = new Image();
       img.onerror = () => reject(new Error('Falha ao processar a imagem. Tente outro formato ou arquivo menor.'));
       img.onload = () => {
-        let { width, height } = img;
-
-        if (width > maxDimension || height > maxDimension) {
-          if (width > height) {
-            height = Math.round((height * maxDimension) / width);
-            width = maxDimension;
-          } else {
-            width = Math.round((width * maxDimension) / height);
-            height = maxDimension;
-          }
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(width, 1);
-        canvas.height = Math.max(height, 1);
-
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          return resolve(reader.result as string);
-        }
-
-        // Draw and compress to JPEG for guaranteed cross-device compatibility
-        ctx.drawImage(img, 0, 0, width, height);
         try {
+          let { width, height } = img;
+
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(width, 1);
+          canvas.height = Math.max(height, 1);
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            return resolve(reader.result as string);
+          }
+
+          // Draw and compress to JPEG for guaranteed cross-device compatibility
+          ctx.drawImage(img, 0, 0, width, height);
           const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+          
+          // Free canvas and image memory immediately to prevent mobile OOM tab crash
+          canvas.width = 0;
+          canvas.height = 0;
+          img.src = '';
+
           resolve(compressedBase64);
-        } catch {
+        } catch (e) {
+          console.warn('[TecConecta] Compressão em canvas falhou, usando imagem padrão:', e);
           resolve(reader.result as string);
         }
       };

@@ -35,8 +35,15 @@ import { useTheme } from './context/ThemeContext';
 import { buildWhatsAppUrl } from './utils/whatsapp';
 import { matchesProviderSearch } from './utils/search';
 
-// Haversine distance calculator for proximity sorting
+// Haversine distance calculator for proximity sorting with NaN immunity
 function calcDist(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  if (
+    typeof lat1 !== 'number' || typeof lon1 !== 'number' ||
+    typeof lat2 !== 'number' || typeof lon2 !== 'number' ||
+    isNaN(lat1) || isNaN(lon1) || isNaN(lat2) || isNaN(lon2)
+  ) {
+    return 999999;
+  }
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
@@ -141,14 +148,19 @@ export default function App() {
     // Listen for cross-component updates
     const handleProviderAdded = (event: CustomEvent<Provider>) => {
       const newP = event.detail;
+      if (!newP || !newP.id) return;
       const cleanPhone = (newP.whatsapp || '').replace(/\D/g, '');
       const cleanName = (newP.name || '').trim().toLowerCase();
       const cleanCity = (newP.city || '').trim().toLowerCase();
       setProviders((prev) => {
         const filtered = prev.filter((p) => {
+          if (!p || !p.id) return false;
           if (p.id === newP.id) return false;
-          if (cleanPhone && p.whatsapp.replace(/\D/g, '') === cleanPhone) return false;
-          if (cleanName && cleanCity && p.name.trim().toLowerCase() === cleanName && p.city.trim().toLowerCase() === cleanCity) return false;
+          const pPhone = (p.whatsapp || '').replace(/\D/g, '');
+          if (cleanPhone && cleanPhone.length >= 10 && pPhone && cleanPhone === pPhone) return false;
+          const pName = (p.name || '').trim().toLowerCase();
+          const pCity = (p.city || '').trim().toLowerCase();
+          if (cleanName && cleanCity && pName === cleanName && pCity === cleanCity) return false;
           return true;
         });
         return [newP, ...filtered];
@@ -323,8 +335,10 @@ export default function App() {
   // Filter and sort providers
   const filteredProviders = useMemo(() => {
     let result = providers.filter((p) => {
+      if (!p || !p.id) return false;
       // City filter - If user is actively typing a service query, allow broad matching without locking/fixing search
-      if (selectedCity !== 'all' && !searchQuery.trim() && !p.city.toLowerCase().includes(selectedCity.toLowerCase())) {
+      const pCity = (p.city || '').toLowerCase();
+      if (selectedCity !== 'all' && !searchQuery.trim() && !pCity.includes(selectedCity.toLowerCase())) {
         return false;
       }
 
@@ -351,7 +365,7 @@ export default function App() {
     const uniqueResult: Provider[] = [];
 
     for (const p of result) {
-      if (seenIds.has(p.id)) continue;
+      if (!p || !p.id || seenIds.has(p.id)) continue;
       const phone = (p.whatsapp || '').replace(/\D/g, '');
 
       if (phone && phone.length >= 10 && seenPhones.has(phone)) continue;
@@ -366,16 +380,26 @@ export default function App() {
 
   // Center coordinates for map view
   const mapCenterCoords = useMemo(() => {
-    if (selectedProvider) return { lat: selectedProvider.lat, lng: selectedProvider.lng };
-    if (userCoords) return userCoords;
-    if (activeLocality) return { lat: activeLocality.lat, lng: activeLocality.lng };
-    if (filteredProviders.length > 0) {
-      return { lat: filteredProviders[0].lat, lng: filteredProviders[0].lng };
+    if (selectedProvider && typeof selectedProvider.lat === 'number' && typeof selectedProvider.lng === 'number' && !isNaN(selectedProvider.lat) && !isNaN(selectedProvider.lng)) {
+      return { lat: selectedProvider.lat, lng: selectedProvider.lng };
+    }
+    if (userCoords && typeof userCoords.lat === 'number' && typeof userCoords.lng === 'number' && !isNaN(userCoords.lat) && !isNaN(userCoords.lng)) {
+      return userCoords;
+    }
+    if (activeLocality && typeof activeLocality.lat === 'number' && typeof activeLocality.lng === 'number' && !isNaN(activeLocality.lat) && !isNaN(activeLocality.lng)) {
+      return { lat: activeLocality.lat, lng: activeLocality.lng };
+    }
+    const firstWithValidCoords = filteredProviders.find(
+      (p) => typeof p?.lat === 'number' && typeof p?.lng === 'number' && !isNaN(p.lat) && !isNaN(p.lng)
+    );
+    if (firstWithValidCoords) {
+      return { lat: firstWithValidCoords.lat, lng: firstWithValidCoords.lng };
     }
     return { lat: -23.55052, lng: -46.633308 }; // São Paulo default
   }, [selectedProvider, userCoords, activeLocality, filteredProviders]);
 
   const handleProviderCreated = (newP: Provider) => {
+    if (!newP || !newP.id) return;
     // Reset filters immediately so new provider is front and center
     setSelectedCity('all');
     setSearchQuery('');
@@ -384,15 +408,17 @@ export default function App() {
 
     setProviders((prev) => {
       const filtered = prev.filter((p) => {
+        if (!p || !p.id) return false;
         if (p.id === newP.id) return false;
-        if (cleanPhone && cleanPhone.length >= 10 && p.whatsapp.replace(/\D/g, '') === cleanPhone) return false;
+        const pPhone = (p.whatsapp || '').replace(/\D/g, '');
+        if (cleanPhone && cleanPhone.length >= 10 && pPhone && pPhone === cleanPhone) return false;
         return true;
       });
       return [newP, ...filtered];
     });
 
     setSelectedProvider(newP);
-    setToastMessage(`Negócio "${newP.name}" publicado com sucesso! Já está visível em tempo real para todos os clientes.`);
+    setToastMessage(`Negócio "${newP.name || 'Prestador'}" publicado com sucesso! Já está visível em tempo real para todos os clientes.`);
     setTimeout(() => setToastMessage(null), 6000);
   };
 
