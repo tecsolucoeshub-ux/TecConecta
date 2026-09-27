@@ -348,22 +348,16 @@ export default function App() {
     // Deduplicate to guarantee twin cards never render
     const seenIds = new Set<string>();
     const seenPhones = new Set<string>();
-    const seenNameCities = new Set<string>();
     const uniqueResult: Provider[] = [];
 
     for (const p of result) {
       if (seenIds.has(p.id)) continue;
       const phone = (p.whatsapp || '').replace(/\D/g, '');
-      const cleanName = (p.name || '').trim().toLowerCase();
-      const cleanCity = (p.city || '').trim().toLowerCase();
-      const nameCity = cleanName && cleanCity ? `${cleanName}::${cleanCity}` : '';
 
-      if (phone && phone.length >= 8 && seenPhones.has(phone)) continue;
-      if (nameCity && seenNameCities.has(nameCity)) continue;
+      if (phone && phone.length >= 10 && seenPhones.has(phone)) continue;
 
       seenIds.add(p.id);
-      if (phone && phone.length >= 8) seenPhones.add(phone);
-      if (nameCity) seenNameCities.add(nameCity);
+      if (phone && phone.length >= 10) seenPhones.add(phone);
       uniqueResult.push(p);
     }
 
@@ -382,22 +376,23 @@ export default function App() {
   }, [selectedProvider, userCoords, activeLocality, filteredProviders]);
 
   const handleProviderCreated = (newP: Provider) => {
+    // Reset filters immediately so new provider is front and center
+    setSelectedCity('all');
+    setSearchQuery('');
+
     const cleanPhone = (newP.whatsapp || '').replace(/\D/g, '');
-    const cleanName = (newP.name || '').trim().toLowerCase();
-    const cleanCity = (newP.city || '').trim().toLowerCase();
 
     setProviders((prev) => {
       const filtered = prev.filter((p) => {
         if (p.id === newP.id) return false;
-        if (cleanPhone && p.whatsapp.replace(/\D/g, '') === cleanPhone) return false;
-        if (cleanName && cleanCity && p.name.trim().toLowerCase() === cleanName && p.city.trim().toLowerCase() === cleanCity) return false;
+        if (cleanPhone && cleanPhone.length >= 10 && p.whatsapp.replace(/\D/g, '') === cleanPhone) return false;
         return true;
       });
       return [newP, ...filtered];
     });
 
     setSelectedProvider(newP);
-    setToastMessage(`Negócio "${newP.name}" cadastrado com sucesso! Já está publicado e visível na plataforma.`);
+    setToastMessage(`Negócio "${newP.name}" publicado com sucesso! Já está visível em tempo real para todos os clientes.`);
     setTimeout(() => setToastMessage(null), 6000);
   };
 

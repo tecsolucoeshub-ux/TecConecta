@@ -197,7 +197,6 @@ export async function syncDeletedIdsFromCloud(): Promise<void> {
 export function deduplicateProviders(list: Provider[]): Provider[] {
   const seenIds = new Set<string>();
   const seenPhones = new Set<string>();
-  const seenNamesCities = new Set<string>();
 
   return list.filter((p) => {
     if (!p || !p.id) return false;
@@ -221,17 +220,12 @@ export function deduplicateProviders(list: Provider[]): Provider[] {
       p.whatsapp = normalizeWhatsAppNumber(p.whatsapp);
     }
     const cleanPhone = (p.whatsapp || '').replace(/\D/g, '');
-    const cleanName = (p.name || '').trim().toLowerCase();
-    const cleanCity = (p.city || '').trim().toLowerCase();
-    const nameCity = cleanName && cleanCity ? `${cleanName}::${cleanCity}` : '';
 
     if (seenIds.has(p.id)) return false;
-    if (cleanPhone && cleanPhone.length >= 8 && seenPhones.has(cleanPhone)) return false;
-    if (nameCity && seenNamesCities.has(nameCity)) return false;
+    if (cleanPhone && cleanPhone.length >= 10 && seenPhones.has(cleanPhone)) return false;
 
     seenIds.add(p.id);
-    if (cleanPhone && cleanPhone.length >= 8) seenPhones.add(cleanPhone);
-    if (nameCity) seenNamesCities.add(nameCity);
+    if (cleanPhone && cleanPhone.length >= 10) seenPhones.add(cleanPhone);
     return true;
   });
 }
