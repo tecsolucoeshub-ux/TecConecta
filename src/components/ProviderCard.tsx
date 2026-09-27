@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageCircle, MapPin, Star, ShieldCheck, ImageIcon, Edit3 } from 'lucide-react';
+import { MessageCircle, MapPin, Star, ShieldCheck, ImageIcon } from 'lucide-react';
 import { Provider } from '../types';
 import { useTheme } from '../context/ThemeContext';
 import { getProviderPhoto, generateFallbackBrandImage, CATEGORY_DEFAULT_PHOTOS } from '../utils/imageCompressor';
@@ -265,34 +265,18 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
               isLight ? 'border-slate-100 text-slate-500' : 'border-white/5 text-gray-400'
             }`}
           >
-            <span className="truncate">É anunciante? Alterar dados ou foto:</span>
-            <div className="flex items-center gap-2 shrink-0">
-              {isAdmin && onEditProfile && (
-                <button
-                  type="button"
-                  onClick={() => onEditProfile(provider)}
-                  className={`hover:underline font-bold flex items-center gap-1 ${
-                    isLight ? 'text-[#0097A7]' : 'text-[#00E5FF]'
-                  }`}
-                  title="Acesso Administrador: Editar dados ou foto deste anúncio"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>[ADM] Editar / Foto</span>
-                </button>
-              )}
-              {isAdmin && onEditProfile && <span className="opacity-40">•</span>}
-              <a
-                href={admContactUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`hover:underline font-semibold ${
-                  isLight ? 'text-[#0097A7]' : 'text-[#00E5FF]'
-                }`}
-                title="Falar com a administração pelo WhatsApp para solicitar alterações"
-              >
-                Falar com ADM
-              </a>
-            </div>
+            <span>É anunciante? Alterar dados ou foto:</span>
+            <a
+              href={admContactUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`hover:underline font-semibold shrink-0 ${
+                isLight ? 'text-[#0097A7]' : 'text-[#00E5FF]'
+              }`}
+              title="Falar com a administração pelo WhatsApp para solicitar alterações ou novas fotos"
+            >
+              Falar com ADM
+            </a>
           </div>
         </div>
       </div>
