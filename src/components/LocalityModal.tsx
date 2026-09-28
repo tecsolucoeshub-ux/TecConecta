@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { X, MapPin, Search, Navigation, CheckCircle2, AlertCircle, Loader2, Building2 } from 'lucide-react';
 import { fetchAddressByCep } from '../utils/cepGeocoding';
-import { POPULAR_CITIES } from '../data/categories';
 
 export interface LocalityInfo {
   label: string;
@@ -11,12 +10,20 @@ export interface LocalityInfo {
   source: 'gps' | 'cep' | 'city';
 }
 
+export interface LocalityCityOption {
+  name: string;
+  lat: number;
+  lng: number;
+  count?: number;
+}
+
 interface LocalityModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentLocality: LocalityInfo | null;
   onSelectLocality: (locality: LocalityInfo) => void;
   onClearLocality: () => void;
+  availableCities?: LocalityCityOption[];
 }
 
 export const LocalityModal: React.FC<LocalityModalProps> = ({
@@ -25,6 +32,7 @@ export const LocalityModal: React.FC<LocalityModalProps> = ({
   currentLocality,
   onSelectLocality,
   onClearLocality,
+  availableCities = [],
 }) => {
   const [cepInput, setCepInput] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -199,32 +207,43 @@ export const LocalityModal: React.FC<LocalityModalProps> = ({
             </button>
           </div>
 
-          {/* Option 3: Major Brazilian Cities */}
-          <div className="pt-2 border-t border-white/10">
-            <label className="text-[11px] font-semibold text-gray-400 mb-2 block flex items-center gap-1">
-              <Building2 className="w-3 h-3 text-[#FF6B00]" />
-              Ou selecione uma cidade principal:
-            </label>
-            <div className="grid grid-cols-2 gap-1.5">
-              {POPULAR_CITIES.map((city) => (
-                <button
-                  key={city.name}
-                  onClick={() => {
-                    onSelectLocality({
-                      label: city.name,
-                      lat: city.lat,
-                      lng: city.lng,
-                      source: 'city'
-                    });
-                    onClose();
-                  }}
-                  className="text-left text-xs px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-[#00E5FF] transition border border-transparent hover:border-[#00E5FF]/30 truncate"
-                >
-                  {city.name}
-                </button>
-              ))}
+          {/* Option 3: Cities with registered advertisers according to CEP */}
+          {availableCities && availableCities.length > 0 && (
+            <div className="pt-2 border-t border-white/10">
+              <label className="text-[11px] font-semibold text-gray-400 mb-2 flex items-center justify-between">
+                <span className="flex items-center gap-1">
+                  <Building2 className="w-3.5 h-3.5 text-[#FF6B00]" />
+                  Cidades com anunciantes cadastrados:
+                </span>
+                <span className="text-[10px] text-[#00E5FF] font-medium">via CEP</span>
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {availableCities.map((city) => (
+                  <button
+                    key={city.name}
+                    type="button"
+                    onClick={() => {
+                      onSelectLocality({
+                        label: city.name,
+                        lat: city.lat,
+                        lng: city.lng,
+                        source: 'city'
+                      });
+                      onClose();
+                    }}
+                    className="text-left text-xs px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-200 hover:text-[#00E5FF] transition border border-white/10 hover:border-[#00E5FF]/40 flex items-center justify-between group"
+                  >
+                    <span className="truncate font-semibold">{city.name}</span>
+                    {typeof city.count === 'number' && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#00E5FF]/15 text-[#00E5FF] font-bold shrink-0 ml-2 group-hover:bg-[#00E5FF] group-hover:text-[#0B132B] transition">
+                        {city.count} {city.count === 1 ? 'anúncio' : 'anúncios'}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

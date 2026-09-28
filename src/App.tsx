@@ -27,7 +27,7 @@ import { InteractiveMap } from './components/InteractiveMap';
 import { RegisterModal } from './components/RegisterModal';
 import { PrivacyPolicyModal } from './components/PrivacyPolicyModal';
 import { ReviewModal } from './components/ReviewModal';
-import { LocalityModal, LocalityInfo } from './components/LocalityModal';
+import { LocalityModal, LocalityInfo, LocalityCityOption } from './components/LocalityModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { Footer } from './components/Footer';
 import { fetchAddressByCep } from './utils/cepGeocoding';
@@ -247,6 +247,48 @@ export default function App() {
     setTimeout(() => setLocationStatus(null), 3000);
   };
 
+  // Dynamic list of cities according to CEP registered by real advertisers
+  const availableCities = useMemo<LocalityCityOption[]>(() => {
+    const cityMap = new Map<string, { lat: number; lng: number; count: number; name: string }>();
+
+    for (const p of providers) {
+      if (!p || !p.city) continue;
+      const rawCity = p.city.trim();
+      if (!rawCity || rawCity.toLowerCase() === 'undefined' || rawCity.toLowerCase() === 'null') continue;
+
+      const key = rawCity.toLowerCase();
+      const existing = cityMap.get(key);
+      const hasCoords = typeof p.lat === 'number' && typeof p.lng === 'number' && !isNaN(p.lat) && !isNaN(p.lng) && (p.lat !== 0 || p.lng !== 0);
+
+      if (existing) {
+        existing.count += 1;
+        if ((existing.lat === -17.7915 && existing.lng === -50.9201) && hasCoords) {
+          existing.lat = p.lat;
+          existing.lng = p.lng;
+        }
+      } else {
+        cityMap.set(key, {
+          name: rawCity,
+          lat: hasCoords ? p.lat : -17.7915,
+          lng: hasCoords ? p.lng : -50.9201,
+          count: 1
+        });
+      }
+    }
+
+    // Always ensure Rio Verde - GO (headquarters of TecSoluções) is present if empty
+    if (!cityMap.has('rio verde - go') && !cityMap.has('rio verde')) {
+      cityMap.set('rio verde - go', {
+        name: 'Rio Verde - GO',
+        lat: -17.7915,
+        lng: -50.9201,
+        count: 0
+      });
+    }
+
+    return Array.from(cityMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }, [providers]);
+
   // City selector change
   const handleSelectCityChange = (cityName: string) => {
     setSelectedCity(cityName);
@@ -255,7 +297,11 @@ export default function App() {
         handleClearLocality();
       }
     } else {
-      const found = POPULAR_CITIES.find(c => c.name.toLowerCase().includes(cityName.toLowerCase()));
+      const found = availableCities.find(
+        (c) => c.name.toLowerCase() === cityName.toLowerCase() ||
+               c.name.toLowerCase().includes(cityName.toLowerCase()) ||
+               cityName.toLowerCase().includes(c.name.toLowerCase())
+      );
       if (found) {
         const loc: LocalityInfo = {
           label: found.name,
@@ -337,9 +383,15 @@ export default function App() {
     let result = providers.filter((p) => {
       if (!p || !p.id) return false;
       // City filter - If user is actively typing a service query, allow broad matching without locking/fixing search
-      const pCity = (p.city || '').toLowerCase();
-      if (selectedCity !== 'all' && !searchQuery.trim() && !pCity.includes(selectedCity.toLowerCase())) {
-        return false;
+      const pCity = (p.city || '').toLowerCase().trim();
+      if (selectedCity !== 'all' && !searchQuery.trim()) {
+        const sel = selectedCity.toLowerCase().trim();
+        const cityOnly = sel.split('-')[0].trim();
+        const pCityOnly = pCity.split('-')[0].trim();
+        const matches = pCity.includes(sel) || sel.includes(pCity) || (cityOnly && pCityOnly && (pCityOnly.includes(cityOnly) || cityOnly.includes(pCityOnly)));
+        if (!matches) {
+          return false;
+        }
       }
 
       // Robust search query matching (accent-insensitive, multi-token across name, category, city, neighborhood, description)
@@ -390,12 +442,12 @@ export default function App() {
       return { lat: activeLocality.lat, lng: activeLocality.lng };
     }
     const firstWithValidCoords = filteredProviders.find(
-      (p) => typeof p?.lat === 'number' && typeof p?.lng === 'number' && !isNaN(p.lat) && !isNaN(p.lng)
+      (p) => typeof p?.lat === 'number' && typeof p?.lng === 'number' && !isNaN(p.lat) && !isNaN(p.lng) && (p.lat !== 0 || p.lng !== 0)
     );
     if (firstWithValidCoords) {
       return { lat: firstWithValidCoords.lat, lng: firstWithValidCoords.lng };
     }
-    return { lat: -23.55052, lng: -46.633308 }; // São Paulo default
+    return { lat: -17.7915, lng: -50.9201 }; // Rio Verde - GO (Sede TecSoluções)
   }, [selectedProvider, userCoords, activeLocality, filteredProviders]);
 
   const handleProviderCreated = (newP: Provider) => {
@@ -546,10 +598,10 @@ export default function App() {
                     : 'bg-[#111B3D] border-white/15 text-white'
                 }`}
               >
-                <option value="all">Todas as Cidades</option>
-                {POPULAR_CITIES.map((c) => (
+                <option value="all">Todas as Cidades ({providers.length})</option>
+                {availableCities.map((c) => (
                   <option key={c.name} value={c.name}>
-                    {c.name}
+                    {c.name} {c.count && c.count > 0 ? `(${c.count})` : ''}
                   </option>
                 ))}
               </select>
@@ -796,6 +848,7 @@ export default function App() {
         currentLocality={activeLocality}
         onSelectLocality={handleSelectLocality}
         onClearLocality={handleClearLocality}
+        availableCities={availableCities}
       />
 
       {/* Simplified Provider Registration Modal (1 Minuto) */}

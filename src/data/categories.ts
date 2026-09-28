@@ -23,12 +23,8 @@ export const CATEGORIES: CategoryMeta[] = [
   { id: 'aulas', name: 'Aulas & Suporte', color: '#4CC9F0', accent: '#4361EE', tag: 'Aulas' }
 ];
 
+export const DEFAULT_BASE_CITY = { name: 'Rio Verde - GO', lat: -17.7915, lng: -50.9201 };
+
 export const POPULAR_CITIES = [
-  { name: 'Rio Verde - GO', lat: -17.7915, lng: -50.9201 },
-  { name: 'São Paulo - SP', lat: -23.55052, lng: -46.633308 },
-  { name: 'Rio de Janeiro - RJ', lat: -22.906847, lng: -43.172896 },
-  { name: 'Belo Horizonte - MG', lat: -19.916681, lng: -43.934493 },
-  { name: 'Curitiba - PR', lat: -25.428954, lng: -49.267137 },
-  { name: 'Salvador - BA', lat: -12.971599, lng: -38.501594 },
-  { name: 'Campinas - SP', lat: -22.90556, lng: -47.06083 }
+  DEFAULT_BASE_CITY
 ];

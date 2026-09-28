@@ -254,8 +254,12 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       const whatsappUrl = buildWhatsAppUrl(provider.whatsapp, whatsappMsg);
       const googleMapsRouteUrl = `https://www.google.com/maps/dir/?api=1&destination=${provider.lat},${provider.lng}`;
 
+      const cleanAddress = provider.address && provider.address !== 'undefined' && provider.address !== 'null' ? provider.address : '';
+      const cleanNeighborhood = provider.neighborhood && provider.neighborhood !== 'undefined' && provider.neighborhood !== 'null' ? provider.neighborhood : '';
+      const cleanCep = provider.cep ? (provider.cep.replace(/\D/g, '').length === 8 ? `${provider.cep.replace(/\D/g, '').slice(0, 5)}-${provider.cep.replace(/\D/g, '').slice(5)}` : provider.cep) : '';
+
       const popupHtml = `
-        <div style="min-width: 240px; max-width: 280px; font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; padding: 2px;">
+        <div style="min-width: 250px; max-width: 290px; font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; padding: 2px;">
           <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
             <img src="${photoUrl}" style="width: 48px; height: 48px; border-radius: 10px; object-fit: cover; border: 1px solid #e2e8f0;" />
             <div style="flex: 1; min-width: 0;">
@@ -271,8 +275,14 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
             </div>
           </div>
 
-          <div style="font-size: 11.5px; color: #475569; line-height: 1.35; margin-bottom: 10px; background: #f8fafc; padding: 7px 9px; border-radius: 8px; border-left: 3px solid #00E5FF;">
-            📍 ${provider.address ? `${provider.address}, ` : ''}${provider.neighborhood ? `${provider.neighborhood}, ` : ''}${provider.city}
+          <div style="font-size: 11.5px; color: #334155; line-height: 1.4; margin-bottom: 10px; background: #f8fafc; padding: 8px 10px; border-radius: 8px; border-left: 3px solid #00E5FF;">
+            <div style="font-weight: 700; color: #0f172a; font-size: 11px; margin-bottom: 2px; display: flex; align-items: center; gap: 4px;">
+              <span>📍 Localização Real (CEP)</span>
+            </div>
+            <div>
+              ${cleanAddress ? `${cleanAddress}, ` : ''}${cleanNeighborhood ? `${cleanNeighborhood}, ` : ''}${provider.city}
+            </div>
+            ${cleanCep ? `<div style="font-size: 10.5px; color: #0284c7; font-weight: 600; margin-top: 3px;">CEP Cadastrado: ${cleanCep}</div>` : ''}
           </div>
 
           <div style="display: flex; flex-direction: column; gap: 6px;">
@@ -325,17 +335,19 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     });
   }, [providers, selectedProvider]);
 
-  // Center or Pan to Selected Provider
+  // Center or Pan to Selected Provider or City Coords
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
 
-    if (selectedProvider && selectedProvider.lat && selectedProvider.lng) {
+    if (selectedProvider && typeof selectedProvider.lat === 'number' && typeof selectedProvider.lng === 'number' && !isNaN(selectedProvider.lat) && !isNaN(selectedProvider.lng)) {
       map.flyTo([selectedProvider.lat, selectedProvider.lng], 16, {
         duration: 1.2
       });
-    } else if (centerCoords && centerCoords.lat && centerCoords.lng) {
-      map.panTo([centerCoords.lat, centerCoords.lng]);
+    } else if (centerCoords && typeof centerCoords.lat === 'number' && typeof centerCoords.lng === 'number' && !isNaN(centerCoords.lat) && !isNaN(centerCoords.lng)) {
+      map.flyTo([centerCoords.lat, centerCoords.lng], 14, {
+        duration: 1.2
+      });
     }
   }, [selectedProvider, centerCoords]);
 
@@ -367,7 +379,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           map.flyTo([pos.coords.latitude, pos.coords.longitude], 16, { duration: 1 });
         },
         () => {
-          alert('Localização desativada ou não autorizada no navegador.');
+          console.warn('[TecConecta] Localização desativada ou não autorizada no navegador.');
         }
       );
     }
