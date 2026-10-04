@@ -8,7 +8,8 @@ import {
   LocateFixed, 
   ShieldCheck,
   Compass,
-  Check
+  Check,
+  Sparkles
 } from 'lucide-react';
 import { Provider } from '../types';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
@@ -95,11 +96,12 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const userMarkerRef = useRef<L.Marker | null>(null);
+  const markersMapRef = useRef<Map<string, L.Marker>>(new Map());
 
   // Default to crystal-clear Google Streets & Roads
   const [activeLayer, setActiveLayer] = useState<MapLayerType>('streets');
   const [showLayerMenu, setShowLayerMenu] = useState(false);
-  const [currentZoom, setCurrentZoom] = useState(15);
+  const [currentZoom, setCurrentZoom] = useState(14);
 
   // Create Leaflet TileLayer with overzooming protection
   const buildTileLayer = (config: LayerConfig): L.TileLayer => {
@@ -122,11 +124,11 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
     const initialLat = centerCoords?.lat || -17.7915;
-    const initialLng = centerCoords?.lng || -50.9234;
+    const initialLng = centerCoords?.lng || -50.9201;
 
     const map = L.map(mapContainerRef.current, {
       center: [initialLat, initialLng],
-      zoom: 15,
+      zoom: 14,
       minZoom: 4,
       maxZoom: 21,
       zoomControl: false,
@@ -150,7 +152,25 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
     mapInstanceRef.current = map;
 
+    // CRITICAL: Leaflet invalidateSize triggers to fix any layout or grid sizing issues
+    const timer1 = setTimeout(() => map.invalidateSize(), 100);
+    const timer2 = setTimeout(() => map.invalidateSize(), 350);
+    const timer3 = setTimeout(() => map.invalidateSize(), 800);
+
+    // Responsive container resize observer
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && mapContainerRef.current) {
+      resizeObserver = new ResizeObserver(() => {
+        map.invalidateSize();
+      });
+      resizeObserver.observe(mapContainerRef.current);
+    }
+
     return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+      if (resizeObserver) resizeObserver.disconnect();
       map.remove();
       mapInstanceRef.current = null;
     };
@@ -198,7 +218,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         .bindPopup(`
           <div style="font-family: sans-serif; padding: 4px 6px; text-align: center;">
             <strong style="color: #00E5FF; font-size: 12px; display: block;">📍 Sua Localização Atual</strong>
-            <span style="font-size: 11px; color: #64748b;">GPS conectado com alta precisão</span>
+            <span style="font-size: 11px; color: #64748b;">GPS de referência ativo</span>
           </div>
         `);
 
@@ -206,13 +226,14 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
   }, [userCoords]);
 
-  // Update Provider Markers
+  // Update Provider Markers accurately positioned by their registered CEP
   useEffect(() => {
     const map = mapInstanceRef.current;
     const markersLayer = markersLayerRef.current;
     if (!map || !markersLayer) return;
 
     markersLayer.clearLayers();
+    markersMapRef.current.clear();
 
     providers.forEach((provider) => {
       if (
@@ -220,7 +241,8 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         typeof provider.lat !== 'number' ||
         typeof provider.lng !== 'number' ||
         isNaN(provider.lat) ||
-        isNaN(provider.lng)
+        isNaN(provider.lng) ||
+        (provider.lat === 0 && provider.lng === 0)
       ) {
         return;
       }
@@ -229,37 +251,46 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       const photoUrl = getProviderPhoto(provider.imageUrl, provider.category, provider.name);
       
       const pinColor = isSelected ? '#00E5FF' : '#FF6B00';
-      const glowEffect = isSelected ? 'box-shadow: 0 0 20px #00E5FF, 0 0 35px rgba(0,229,255,0.7); transform: scale(1.15);' : 'box-shadow: 0 4px 14px rgba(0,0,0,0.5);';
+      const glowEffect = isSelected 
+        ? 'box-shadow: 0 0 20px #00E5FF, 0 0 35px rgba(0,229,255,0.7); transform: scale(1.18);' 
+        : 'box-shadow: 0 4px 14px rgba(0,0,0,0.5);';
       const borderStyle = isSelected ? 'border: 2.5px solid #FFFFFF;' : 'border: 2px solid rgba(255,255,255,0.9);';
 
       const customIcon = L.divIcon({
         className: `custom-provider-marker-${provider.id}`,
         html: `
-          <div style="position: relative; width: 40px; height: 48px; cursor: pointer; display: flex; flex-direction: column; align-items: center; transition: transform 0.2s ease;">
-            <div style="width: 38px; height: 38px; border-radius: 50%; background: ${pinColor}; ${borderStyle} ${glowEffect} overflow: hidden; display: flex; align-items: center; justify-content: center; z-index: 2;">
+          <div style="position: relative; width: 42px; height: 50px; cursor: pointer; display: flex; flex-direction: column; align-items: center; transition: transform 0.2s ease;">
+            <div style="width: 40px; height: 40px; border-radius: 50%; background: ${pinColor}; ${borderStyle} ${glowEffect} overflow: hidden; display: flex; align-items: center; justify-content: center; z-index: 2;">
               <img src="${photoUrl}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'" />
             </div>
-            <div style="width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid ${pinColor}; margin-top: -2px; z-index: 1;"></div>
+            <div style="width: 0; height: 0; border-left: 7px solid transparent; border-right: 7px solid transparent; border-top: 9px solid ${pinColor}; margin-top: -2px; z-index: 1;"></div>
           </div>
         `,
-        iconSize: [40, 48],
-        iconAnchor: [20, 48],
-        popupAnchor: [0, -48]
+        iconSize: [42, 50],
+        iconAnchor: [21, 50],
+        popupAnchor: [0, -50]
       });
 
-      const marker = L.marker([provider.lat, provider.lng], { icon: customIcon });
+      const marker = L.marker([provider.lat, provider.lng], { 
+        icon: customIcon,
+        zIndexOffset: isSelected ? 1000 : 100
+      });
 
       // Build WhatsApp and Navigation URLs
       const whatsappMsg = `Olá ${provider.name}, vi seu anúncio no TecConecta (TecSoluções) e gostaria de solicitar um orçamento!`;
       const whatsappUrl = buildWhatsAppUrl(provider.whatsapp, whatsappMsg);
       const googleMapsRouteUrl = `https://www.google.com/maps/dir/?api=1&destination=${provider.lat},${provider.lng}`;
 
-      const cleanAddress = provider.address && provider.address !== 'undefined' && provider.address !== 'null' ? provider.address : '';
-      const cleanNeighborhood = provider.neighborhood && provider.neighborhood !== 'undefined' && provider.neighborhood !== 'null' ? provider.neighborhood : '';
-      const cleanCep = provider.cep ? (provider.cep.replace(/\D/g, '').length === 8 ? `${provider.cep.replace(/\D/g, '').slice(0, 5)}-${provider.cep.replace(/\D/g, '').slice(5)}` : provider.cep) : '';
+      const rawAddress = provider.address && provider.address !== 'undefined' && provider.address !== 'null' ? provider.address : '';
+      const rawNeighborhood = provider.neighborhood && provider.neighborhood !== 'undefined' && provider.neighborhood !== 'null' ? provider.neighborhood : '';
+      
+      const cleanCepDigits = (provider.cep || '').replace(/\D/g, '');
+      const formattedCep = cleanCepDigits.length === 8 
+        ? `${cleanCepDigits.slice(0, 5)}-${cleanCepDigits.slice(5)}` 
+        : provider.cep || '';
 
       const popupHtml = `
-        <div style="min-width: 250px; max-width: 290px; font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; padding: 2px;">
+        <div style="min-width: 250px; max-width: 295px; font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; padding: 2px;">
           <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
             <img src="${photoUrl}" style="width: 48px; height: 48px; border-radius: 10px; object-fit: cover; border: 1px solid #e2e8f0;" />
             <div style="flex: 1; min-width: 0;">
@@ -276,13 +307,13 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           </div>
 
           <div style="font-size: 11.5px; color: #334155; line-height: 1.4; margin-bottom: 10px; background: #f8fafc; padding: 8px 10px; border-radius: 8px; border-left: 3px solid #00E5FF;">
-            <div style="font-weight: 700; color: #0f172a; font-size: 11px; margin-bottom: 2px; display: flex; align-items: center; gap: 4px;">
-              <span>📍 Localização Real (CEP)</span>
+            <div style="font-weight: 700; color: #0f172a; font-size: 11px; margin-bottom: 3px; display: flex; align-items: center; gap: 4px;">
+              <span>📍 Localização Real pelo CEP</span>
             </div>
             <div>
-              ${cleanAddress ? `${cleanAddress}, ` : ''}${cleanNeighborhood ? `${cleanNeighborhood}, ` : ''}${provider.city}
+              ${rawAddress ? `${rawAddress}, ` : ''}${rawNeighborhood ? `${rawNeighborhood}, ` : ''}${provider.city}
             </div>
-            ${cleanCep ? `<div style="font-size: 10.5px; color: #0284c7; font-weight: 600; margin-top: 3px;">CEP Cadastrado: ${cleanCep}</div>` : ''}
+            ${formattedCep ? `<div style="font-size: 10.5px; color: #0284c7; font-weight: 700; margin-top: 4px;">CEP Cadastrado: ${formattedCep}</div>` : ''}
           </div>
 
           <div style="display: flex; flex-direction: column; gap: 6px;">
@@ -327,24 +358,62 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         }
       });
 
+      markersMapRef.current.set(provider.id, marker);
+      markersLayer.addLayer(marker);
+
       if (isSelected) {
         marker.openPopup();
       }
-
-      markersLayer.addLayer(marker);
     });
   }, [providers, selectedProvider]);
 
-  // Center or Pan to Selected Provider or City Coords
+  // Center or Pan with flyTo when Selected Provider or Center Coords change
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
 
-    if (selectedProvider && typeof selectedProvider.lat === 'number' && typeof selectedProvider.lng === 'number' && !isNaN(selectedProvider.lat) && !isNaN(selectedProvider.lng)) {
+    map.invalidateSize();
+
+    if (
+      selectedProvider &&
+      typeof selectedProvider.lat === 'number' &&
+      typeof selectedProvider.lng === 'number' &&
+      !isNaN(selectedProvider.lat) &&
+      !isNaN(selectedProvider.lng)
+    ) {
       map.flyTo([selectedProvider.lat, selectedProvider.lng], 16, {
         duration: 1.2
       });
-    } else if (centerCoords && typeof centerCoords.lat === 'number' && typeof centerCoords.lng === 'number' && !isNaN(centerCoords.lat) && !isNaN(centerCoords.lng)) {
+
+      // Automatically open the popup of the selected provider
+      const targetMarker = markersMapRef.current.get(selectedProvider.id);
+      if (targetMarker) {
+        targetMarker.setZIndexOffset(1000);
+        map.once('moveend', () => {
+          targetMarker.openPopup();
+        });
+        setTimeout(() => targetMarker.openPopup(), 600);
+      }
+    } else if (
+      centerCoords &&
+      typeof centerCoords.lat === 'number' &&
+      typeof centerCoords.lng === 'number' &&
+      !isNaN(centerCoords.lat) &&
+      !isNaN(centerCoords.lng)
+    ) {
+      // If no single provider is selected, check if we should fit bounds for the visible providers
+      if (providers.length > 1) {
+        const validCoords = providers
+          .filter(p => typeof p.lat === 'number' && typeof p.lng === 'number' && !isNaN(p.lat) && !isNaN(p.lng) && (p.lat !== 0 || p.lng !== 0))
+          .map(p => [p.lat, p.lng] as [number, number]);
+
+        if (validCoords.length > 0) {
+          const bounds = L.latLngBounds(validCoords);
+          map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+          return;
+        }
+      }
+
       map.flyTo([centerCoords.lat, centerCoords.lng], 14, {
         duration: 1.2
       });
@@ -354,9 +423,21 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   // Fit all providers in view
   const handleFitAllBounds = () => {
     const map = mapInstanceRef.current;
-    if (!map || providers.length === 0) return;
+    if (!map) return;
+    map.invalidateSize();
 
-    const bounds = L.latLngBounds(providers.map((p) => [p.lat, p.lng]));
+    const validCoords = providers
+      .filter(p => typeof p.lat === 'number' && typeof p.lng === 'number' && !isNaN(p.lat) && !isNaN(p.lng) && (p.lat !== 0 || p.lng !== 0))
+      .map(p => [p.lat, p.lng] as [number, number]);
+
+    if (validCoords.length === 0) {
+      if (centerCoords) {
+        map.flyTo([centerCoords.lat, centerCoords.lng], 14);
+      }
+      return;
+    }
+
+    const bounds = L.latLngBounds(validCoords);
     if (userCoords) {
       bounds.extend([userCoords.lat, userCoords.lng]);
     }
@@ -367,6 +448,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const handleLocateUser = () => {
     const map = mapInstanceRef.current;
     if (!map) return;
+    map.invalidateSize();
 
     if (userCoords && userCoords.lat && userCoords.lng) {
       map.flyTo([userCoords.lat, userCoords.lng], 16, { duration: 1 });
@@ -386,7 +468,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   };
 
   return (
-    <div className="relative w-full h-full min-h-[500px] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#080E21]">
+    <div className="relative w-full h-full min-h-[520px] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#080E21]">
       {/* Actual Leaflet Container */}
       <div 
         ref={mapContainerRef} 
@@ -394,19 +476,28 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         style={{ minHeight: '520px' }}
       />
 
-      {/* Top Left: Providers Count Badge & Clear Selection */}
-      <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0B132B]/90 border border-white/10 backdrop-blur-md text-xs font-semibold text-white shadow-lg">
+      {/* Top Left: Providers Count Badge & Reset Selection */}
+      <div className="absolute top-3 left-3 z-10 flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0B132B]/95 border border-white/10 backdrop-blur-md text-xs font-semibold text-white shadow-lg">
           <span className="w-2 h-2 rounded-full bg-[#00E5FF] animate-pulse" />
-          <span>{providers.length} Prestadores no Mapa</span>
+          <span>{providers.length} Anunciantes no CEP/Mapa</span>
         </div>
 
-        {selectedProvider && (
+        {selectedProvider ? (
           <button
             onClick={() => onSelectProvider(null)}
-            className="px-2.5 py-1 rounded-xl bg-[#00E5FF]/20 border border-[#00E5FF]/40 text-[#00E5FF] text-[11px] font-bold hover:bg-[#00E5FF]/30 transition backdrop-blur-md"
+            className="px-2.5 py-1.5 rounded-xl bg-[#00E5FF]/20 border border-[#00E5FF]/40 text-[#00E5FF] text-[11px] font-bold hover:bg-[#00E5FF]/30 transition backdrop-blur-md shadow-md"
           >
             Limpar Seleção
+          </button>
+        ) : (
+          <button
+            onClick={handleFitAllBounds}
+            className="px-2.5 py-1.5 rounded-xl bg-white/10 border border-white/15 text-gray-200 text-[11px] font-semibold hover:bg-white/20 transition backdrop-blur-md shadow-md flex items-center gap-1"
+            title="Enquadrar todos os anunciantes na tela"
+          >
+            <Compass className="w-3 h-3 text-[#00E5FF]" />
+            <span>Enquadrar Todos</span>
           </button>
         )}
       </div>
@@ -523,7 +614,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       {/* Bottom Left: Guarantee Notice */}
       <div className="absolute bottom-3 left-3 z-10 hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-[#0B132B]/90 border border-[#00E5FF]/30 text-[10px] text-gray-200 backdrop-blur-md shadow-md">
         <ShieldCheck className="w-3.5 h-3.5 text-[#00E5FF]" />
-        <span>Navegação por Ruas & Avenidas em Alta Definição • TecSoluções</span>
+        <span>Localização Real pelo CEP • TecSoluções</span>
       </div>
     </div>
   );

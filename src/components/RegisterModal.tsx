@@ -60,14 +60,14 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const [cep, setCep] = useState('');
   const [isSearchingCep, setIsSearchingCep] = useState(false);
   const [cepStatus, setCepStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [city, setCity] = useState('São Paulo - SP');
+  const [city, setCity] = useState('Rio Verde - GO');
   const [neighborhood, setNeighborhood] = useState('');
   const [address, setAddress] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [description, setDescription] = useState('');
   const [imageUrl, setImageUrl] = useState('');
-  const [lat, setLat] = useState<number>(userCoords?.lat || -23.55052);
-  const [lng, setLng] = useState<number>(userCoords?.lng || -46.633308);
+  const [lat, setLat] = useState<number>(-17.7915);
+  const [lng, setLng] = useState<number>(-50.9201);
   const [isLocating, setIsLocating] = useState(false);
   const [locationNotice, setLocationNotice] = useState<string | null>(null);
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -77,14 +77,6 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
   // Real-time WhatsApp validator
   const whatsappValidation = useMemo(() => validateWhatsAppNumber(whatsapp), [whatsapp]);
-
-  // Keep coordinates updated if user coordinates are acquired or change
-  useEffect(() => {
-    if (userCoords?.lat && userCoords?.lng) {
-      setLat(userCoords.lat);
-      setLng(userCoords.lng);
-    }
-  }, [userCoords?.lat, userCoords?.lng]);
 
   // Close modal on Escape key
   useEffect(() => {
@@ -239,16 +231,45 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     setIsSubmitting(true);
 
     try {
+      const cleanCep = cep.replace(/\D/g, '');
+      let finalLat = lat;
+      let finalLng = lng;
+      let finalCity = city.trim();
+      let finalNeighborhood = neighborhood.trim();
+      let finalAddress = address.trim();
+
+      // Ensure exact coordinates and address components are verified for the registered CEP
+      if (cleanCep.length === 8) {
+        try {
+          const geoRes = await fetchAddressByCep(cleanCep);
+          if (geoRes.lat && geoRes.lng) {
+            finalLat = geoRes.lat;
+            finalLng = geoRes.lng;
+          }
+          if (geoRes.city) {
+            finalCity = geoRes.city;
+          }
+          if (!finalNeighborhood && geoRes.neighborhood) {
+            finalNeighborhood = geoRes.neighborhood;
+          }
+          if (!finalAddress && geoRes.street) {
+            finalAddress = geoRes.street;
+          }
+        } catch (e) {
+          console.warn('[TecConecta] Validação de CEP no submit:', e);
+        }
+      }
+
       const newProvider: Provider = {
         id: `provider-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         name: name.trim(),
         category: finalCategory,
-        city: city.trim(),
-        neighborhood: neighborhood.trim() || undefined,
-        address: address.trim() || undefined,
-        cep: cep.replace(/\D/g, '') || undefined,
-        lat: lat || -23.55052,
-        lng: lng || -46.633308,
+        city: finalCity || 'Rio Verde - GO',
+        neighborhood: finalNeighborhood || undefined,
+        address: finalAddress || undefined,
+        cep: cleanCep || undefined,
+        lat: finalLat,
+        lng: finalLng,
         whatsapp: whatsappValidation.normalized,
         description: description.trim() || undefined,
         imageUrl: imageUrl.trim() || undefined,

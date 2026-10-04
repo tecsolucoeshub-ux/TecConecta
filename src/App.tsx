@@ -30,7 +30,7 @@ import { ReviewModal } from './components/ReviewModal';
 import { LocalityModal, LocalityInfo, LocalityCityOption } from './components/LocalityModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { Footer } from './components/Footer';
-import { fetchAddressByCep } from './utils/cepGeocoding';
+import { fetchAddressByCep, CITY_CENTROIDS, normalizeCityName } from './utils/cepGeocoding';
 import { useTheme } from './context/ThemeContext';
 import { buildWhatsAppUrl } from './utils/whatsapp';
 import { matchesProviderSearch } from './utils/search';
@@ -260,6 +260,16 @@ export default function App() {
       const existing = cityMap.get(key);
       const hasCoords = typeof p.lat === 'number' && typeof p.lng === 'number' && !isNaN(p.lat) && !isNaN(p.lng) && (p.lat !== 0 || p.lng !== 0);
 
+      // Determine accurate coordinates using provider coords or known city centroid
+      let cityLat = hasCoords ? p.lat : -17.7915;
+      let cityLng = hasCoords ? p.lng : -50.9201;
+
+      const norm = normalizeCityName(rawCity);
+      if (!hasCoords && CITY_CENTROIDS[norm]) {
+        cityLat = CITY_CENTROIDS[norm].lat;
+        cityLng = CITY_CENTROIDS[norm].lng;
+      }
+
       if (existing) {
         existing.count += 1;
         if ((existing.lat === -17.7915 && existing.lng === -50.9201) && hasCoords) {
@@ -269,8 +279,8 @@ export default function App() {
       } else {
         cityMap.set(key, {
           name: rawCity,
-          lat: hasCoords ? p.lat : -17.7915,
-          lng: hasCoords ? p.lng : -50.9201,
+          lat: cityLat,
+          lng: cityLng,
           count: 1
         });
       }
@@ -292,6 +302,7 @@ export default function App() {
   // City selector change
   const handleSelectCityChange = (cityName: string) => {
     setSelectedCity(cityName);
+    setSelectedProvider(null);
     if (cityName === 'all') {
       if (activeLocality?.source === 'city') {
         handleClearLocality();
@@ -475,9 +486,22 @@ export default function App() {
   };
 
   const handleFocusOnMap = (p: Provider) => {
+    // If a specific city filter was active that excludes this provider, reset to 'all' so the pin and card are present
+    if (selectedCity !== 'all') {
+      const pCity = (p.city || '').toLowerCase();
+      const selCity = selectedCity.toLowerCase();
+      if (!pCity.includes(selCity) && !selCity.includes(pCity)) {
+        setSelectedCity('all');
+      }
+    }
     setSelectedProvider(p);
     setViewMode('map');
-    window.scrollTo({ top: 120, behavior: 'smooth' });
+    const switcherEl = document.getElementById('view-switcher-container');
+    if (switcherEl) {
+      switcherEl.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      window.scrollTo({ top: 120, behavior: 'smooth' });
+    }
   };
 
   return (

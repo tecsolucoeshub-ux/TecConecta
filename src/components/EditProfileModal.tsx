@@ -189,18 +189,40 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
     setErrorMessage(null);
 
     try {
+      const cleanCep = cep.replace(/\D/g, '');
+      let finalLat = lat;
+      let finalLng = lng;
+      let finalCity = city.trim();
+      let finalNeighborhood = neighborhood.trim();
+      let finalAddress = address.trim();
+
+      if (cleanCep.length === 8 && (finalLat === 0 || finalLng === 0 || isNaN(finalLat) || isNaN(finalLng))) {
+        try {
+          const geoRes = await fetchAddressByCep(cleanCep);
+          if (geoRes.lat && geoRes.lng) {
+            finalLat = geoRes.lat;
+            finalLng = geoRes.lng;
+          }
+          if (geoRes.city) finalCity = geoRes.city;
+          if (!finalNeighborhood && geoRes.neighborhood) finalNeighborhood = geoRes.neighborhood;
+          if (!finalAddress && geoRes.street) finalAddress = geoRes.street;
+        } catch (e) {
+          console.warn('[TecConecta] Validação de CEP no edit save:', e);
+        }
+      }
+
       const updated = await updateProvider(selectedProvider.id, {
         name: name.trim(),
         category: finalCategory,
-        cep: cep.trim() || undefined,
-        address: address.trim() || 'Atendimento Local',
-        neighborhood: neighborhood.trim() || undefined,
-        city: city.trim(),
+        cep: cleanCep || undefined,
+        address: finalAddress || 'Atendimento Local',
+        neighborhood: finalNeighborhood || undefined,
+        city: finalCity,
         whatsapp: whatsappValidation.normalized,
         description: description.trim() || undefined,
         imageUrl: imageUrl.trim(),
-        lat,
-        lng
+        lat: finalLat,
+        lng: finalLng
       });
 
       onUpdated(updated);
