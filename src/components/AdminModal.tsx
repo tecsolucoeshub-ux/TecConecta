@@ -24,7 +24,8 @@ import {
   Presentation,
   Play,
   Cloud,
-  RefreshCw
+  RefreshCw,
+  Mail
 } from 'lucide-react';
 import { SponsoredBanner, AdminSettings, Provider } from '../types';
 import { CATEGORIES } from '../data/categories';
@@ -34,7 +35,10 @@ import {
   saveAdminSettings,
   syncAllLocalToCloud,
   isDemoProvider,
-  clearDemoProviders
+  clearDemoProviders,
+  PRIMARY_ADMIN_EMAIL,
+  DEFAULT_SECURE_ADMIN_PIN,
+  signInAdminWithGoogle
 } from '../services/firebase';
 import { ImageUploadField } from './ImageUploadField';
 import { normalizeWhatsAppNumber, validateWhatsAppNumber } from '../utils/whatsapp';
@@ -67,14 +71,21 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   onEditProvider,
   onAuthChange,
 }) => {
-  // Safe admin settings fallback
+  // Safe admin settings fallback with persistent secure defaults
   const safeAdminSettings: AdminSettings = adminSettings || {
     admWhatsapp: '64999317499',
     admName: 'TecSoluções Administrativo',
     bannerHeadline: 'Anuncie Sua Empresa Aqui',
     bannerSubtext: 'Espaço exclusivo para divulgação de empresas locais e parceiros.',
-    adminPin: 'admin123'
+    adminPin: DEFAULT_SECURE_ADMIN_PIN,
+    adminEmail: PRIMARY_ADMIN_EMAIL,
+    adminPasswordConfigured: true
   };
+
+  // Determine active master password (custom from Firestore if >=6 chars, or default secure pin)
+  const activeMasterPin = (safeAdminSettings.adminPin && safeAdminSettings.adminPin.trim().length >= 6)
+    ? safeAdminSettings.adminPin.trim()
+    : DEFAULT_SECURE_ADMIN_PIN;
 
   // Authentication & Session (guarded against iframe storage restrictions)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -84,15 +95,13 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       return false;
     }
   });
+
+  // Login form state
+  const [emailInput, setEmailInput] = useState(PRIMARY_ADMIN_EMAIL);
   const [passwordInput, setPasswordInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-
-  // First-time setup state (when master password is not yet personalized)
-  const isDefaultPassword = !safeAdminSettings.adminPin || safeAdminSettings.adminPin === '' || safeAdminSettings.adminPin === 'admin123';
-  const [isSetupMode, setIsSetupMode] = useState<boolean>(isDefaultPassword);
-  const [setupNewPassword, setSetupNewPassword] = useState('');
-  const [setupConfirmPassword, setSetupConfirmPassword] = useState('');
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   // Active Tab: 'banners' | 'settings' | 'providers' | 'presentation'
   const [activeTab, setActiveTab] = useState<'banners' | 'settings' | 'providers' | 'presentation'>('banners');
@@ -130,7 +139,8 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [isConfirmingClearDemo, setIsConfirmingClearDemo] = useState(false);
   const [isClearingDemo, setIsClearingDemo] = useState(false);
 
-  // Change password form in settings
+  // Change password form in settings (requires current password)
+  const [currentPasswordForChange, setCurrentPasswordForChange] = useState('');
   const [newMasterPassword, setNewMasterPassword] = useState('');
   const [confirmMasterPassword, setConfirmMasterPassword] = useState('');
   const [passwordChangeSuccess, setPasswordChangeSuccess] = useState(false);
@@ -146,94 +156,133 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       setAdmName(adminSettings.admName || 'TecSoluções Administrativo');
       setBannerHeadline(adminSettings.bannerHeadline || 'Anuncie Sua Empresa Aqui');
       setBannerSubtext(adminSettings.bannerSubtext || 'Espaço exclusivo para divulgação de empresas locais.');
+      setEmailInput(PRIMARY_ADMIN_EMAIL);
     }
   }, [adminSettings]);
 
   if (!isOpen) return null;
 
-  // Handle Login
+  // Handle Login with Email and Password
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
 
-    const currentSavedPin = adminSettings.adminPin || 'admin123';
-    // Allow either the configured password or the initial setup
-    if (passwordInput.trim() === currentSavedPin || (currentSavedPin === 'admin123' && passwordInput.trim() === 'admin123')) {
+    const cleanEmail = emailInput.trim().toLowerCase();
+    const authorizedEmail = PRIMARY_ADMIN_EMAIL.toLowerCase();
+
+    // Verify authorized administrator email
+    if (cleanEmail !== authorizedEmail) {
+      setAuthError(`Acesso negado: O e-mail "${cleanEmail}" não possui privilégios de Administrador. Apenas ${authorizedEmail} tem permissão de acesso.`);
+      return;
+    }
+
+    const currentSavedPin = (safeAdminSettings.adminPin || '').trim();
+    const defaultSecurePin = DEFAULT_SECURE_ADMIN_PIN.trim();
+
+    // Accepts either the personalized password configured in Firestore or the fallback master key
+    const isMatch =
+      (currentSavedPin && passwordInput.trim() === currentSavedPin) ||
+      (defaultSecurePin && passwordInput.trim() === defaultSecurePin) ||
+      (activeMasterPin && passwordInput.trim() === activeMasterPin);
+
+    if (isMatch) {
       setIsAuthenticated(true);
-      sessionStorage.setItem(SESSION_AUTH_KEY, 'true');
+      try {
+        sessionStorage.setItem(SESSION_AUTH_KEY, 'true');
+        sessionStorage.setItem('tecconecta_admin_email', authorizedEmail);
+      } catch {}
       onAuthChange?.(true);
       setPasswordInput('');
+      setAuthError(null);
     } else {
-      setAuthError('Senha de acesso incorreta. Verifique e tente novamente.');
+      setAuthError('Senha de acesso incorreta. Verifique suas credenciais de Administrador da TecSoluções e tente novamente.');
     }
   };
 
-  // Handle First Time Master Password Setup
-  const handleFirstTimeSetup = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Handle Google OAuth Sign-in with strict verification of tecsolucoeshub@gmail.com
+  const handleGoogleLogin = async () => {
+    setIsGoogleLoading(true);
     setAuthError(null);
-
-    if (setupNewPassword.length < 4) {
-      setAuthError('A senha deve conter no mínimo 4 caracteres.');
-      return;
+    try {
+      const res = await signInAdminWithGoogle();
+      if (res.success) {
+        setIsAuthenticated(true);
+        try {
+          sessionStorage.setItem(SESSION_AUTH_KEY, 'true');
+          sessionStorage.setItem('tecconecta_admin_email', PRIMARY_ADMIN_EMAIL);
+        } catch {}
+        onAuthChange?.(true);
+        setAuthError(null);
+      } else {
+        setAuthError(res.error || 'Autenticação Google não autorizada.');
+      }
+    } catch (err: any) {
+      setAuthError(err?.message || 'Falha ao conectar com Conta Google.');
+    } finally {
+      setIsGoogleLoading(false);
     }
-
-    if (setupNewPassword !== setupConfirmPassword) {
-      setAuthError('A confirmação de senha não coincide com a nova senha.');
-      return;
-    }
-
-    const updated: AdminSettings = {
-      ...adminSettings,
-      adminPin: setupNewPassword.trim(),
-    };
-
-    saveAdminSettings(updated);
-    onSettingsUpdated(updated);
-    setIsAuthenticated(true);
-    sessionStorage.setItem(SESSION_AUTH_KEY, 'true');
-    onAuthChange?.(true);
-    setIsSetupMode(false);
-    setSetupNewPassword('');
-    setSetupConfirmPassword('');
   };
 
   // Logout / Lock Admin Panel
   const handleLogout = () => {
     setIsAuthenticated(false);
-    sessionStorage.removeItem(SESSION_AUTH_KEY);
+    try {
+      sessionStorage.removeItem(SESSION_AUTH_KEY);
+      sessionStorage.removeItem('tecconecta_admin_email');
+    } catch {}
     onAuthChange?.(false);
     setPasswordInput('');
     setAuthError(null);
   };
 
-  // Change Password from inside Settings tab
-  const handleChangePassword = (e: React.FormEvent) => {
+  // Change Password from inside Settings tab (requires current password)
+  const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordChangeError(null);
     setPasswordChangeSuccess(false);
 
-    if (newMasterPassword.length < 4) {
-      setPasswordChangeError('A nova senha deve possuir pelo menos 4 caracteres.');
+    const currentSavedPin = (safeAdminSettings.adminPin || '').trim();
+    const defaultSecurePin = DEFAULT_SECURE_ADMIN_PIN.trim();
+
+    const isCurrentPasswordCorrect =
+      (currentSavedPin && currentPasswordForChange.trim() === currentSavedPin) ||
+      (defaultSecurePin && currentPasswordForChange.trim() === defaultSecurePin) ||
+      (activeMasterPin && currentPasswordForChange.trim() === activeMasterPin);
+
+    if (!isCurrentPasswordCorrect) {
+      setPasswordChangeError('A senha atual digitada está incorreta.');
+      return;
+    }
+
+    if (newMasterPassword.length < 6) {
+      setPasswordChangeError('A nova senha deve possuir pelo menos 6 caracteres.');
       return;
     }
 
     if (newMasterPassword !== confirmMasterPassword) {
-      setPasswordChangeError('A confirmação de senha não confere.');
+      setPasswordChangeError('A confirmação da nova senha não confere.');
       return;
     }
 
     const updated: AdminSettings = {
-      ...adminSettings,
+      ...safeAdminSettings,
+      adminEmail: PRIMARY_ADMIN_EMAIL,
       adminPin: newMasterPassword.trim(),
+      adminPasswordConfigured: true,
     };
 
-    saveAdminSettings(updated);
-    onSettingsUpdated(updated);
-    setPasswordChangeSuccess(true);
-    setNewMasterPassword('');
-    setConfirmMasterPassword('');
-    setTimeout(() => setPasswordChangeSuccess(false), 4000);
+    try {
+      await saveAdminSettings(updated);
+      onSettingsUpdated(updated);
+      setPasswordChangeSuccess(true);
+      setCurrentPasswordForChange('');
+      setNewMasterPassword('');
+      setConfirmMasterPassword('');
+      setTimeout(() => setPasswordChangeSuccess(false), 4000);
+    } catch (err) {
+      console.error('Erro ao atualizar senha:', err);
+      setPasswordChangeError('Erro ao atualizar senha no servidor.');
+    }
   };
 
   // Create Banner
@@ -499,154 +548,108 @@ export const AdminModal: React.FC<AdminModalProps> = ({
         {/* Auth Barrier */}
         {!isAuthenticated ? (
           <div className="max-w-md mx-auto py-6 w-full space-y-5 overflow-y-auto">
-            {/* Setup Mode: Admin defines custom password */}
-            {isSetupMode ? (
-              <div className="space-y-4 text-center">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#FF6B00]/20 to-[#00E5FF]/20 border border-[#FF6B00]/40 flex items-center justify-center mx-auto text-[#FF6B00] shadow-[0_0_20px_rgba(255,107,0,0.2)]">
-                  <ShieldAlert className="w-6 h-6 animate-pulse" />
-                </div>
-
-                <div>
-                  <h3 className="text-base sm:text-lg font-bold text-white font-['Outfit']">
-                    Definir Senha de Administrador
-                  </h3>
-                  <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
-                    Por segurança, crie sua senha mestra exclusiva para proteger o acesso administrativo ao TecConecta.
-                  </p>
-                </div>
-
-                <form onSubmit={handleFirstTimeSetup} className="space-y-3 text-left">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-300 mb-1">
-                      Nova Senha de ADM:
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        value={setupNewPassword}
-                        onChange={(e) => setSetupNewPassword(e.target.value)}
-                        placeholder="Digite sua senha de segurança"
-                        required
-                        className="w-full rounded-xl bg-white/5 border border-white/20 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-[#00E5FF] transition pr-10"
-                        autoFocus
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-300 mb-1">
-                      Confirmar Senha:
-                    </label>
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={setupConfirmPassword}
-                      onChange={(e) => setSetupConfirmPassword(e.target.value)}
-                      placeholder="Digite a senha novamente"
-                      required
-                      className="w-full rounded-xl bg-white/5 border border-white/20 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-[#00E5FF] transition"
-                    />
-                  </div>
-
-                  {authError && (
-                    <div className="p-2.5 rounded-xl bg-red-500/15 border border-red-500/30 text-xs text-red-300 flex items-center gap-1.5">
-                      <AlertCircle className="w-4 h-4 shrink-0" />
-                      <span>{authError}</span>
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#00E5FF] to-[#FF6B00] text-[#0B132B] font-extrabold text-sm font-['Outfit'] transition hover:brightness-110 shadow-[0_0_20px_rgba(0,229,255,0.3)]"
-                  >
-                    Salvar Senha e Acessar Painel
-                  </button>
-
-                  <div className="text-center pt-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsSetupMode(false);
-                        setAuthError(null);
-                      }}
-                      className="text-xs text-gray-400 hover:text-white underline"
-                    >
-                      Já possui uma senha? Fazer login
-                    </button>
-                  </div>
-                </form>
+            {/* Standard Secure Login with E-mail and Password */}
+            <div className="space-y-4 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-[#00E5FF]/10 border border-[#00E5FF]/30 flex items-center justify-center mx-auto text-[#00E5FF] shadow-[0_0_20px_rgba(0,229,255,0.15)]">
+                <Lock className="w-6 h-6" />
               </div>
-            ) : (
-              /* Standard Secure Login */
-              <div className="space-y-4 text-center">
-                <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-[#00E5FF] shadow-[0_0_20px_rgba(0,229,255,0.15)]">
-                  <Lock className="w-6 h-6" />
+
+              <div>
+                <h3 className="text-base sm:text-lg font-bold text-white font-['Outfit']">
+                  Acesso Restrito ao Administrador
+                </h3>
+                <p className="text-xs text-gray-400 mt-1">
+                  Digite o e-mail de administrador e sua senha pessoal para desbloquear o painel.
+                </p>
+              </div>
+
+              <form onSubmit={handleLogin} className="space-y-3.5 text-left">
+                <div>
+                  <label className="text-xs font-semibold text-gray-300 mb-1 flex items-center justify-between">
+                    <span>E-mail de Administrador:</span>
+                    <span className="text-[10px] text-[#00E5FF] font-mono font-bold bg-[#00E5FF]/10 px-2 py-0.5 rounded border border-[#00E5FF]/30">Fixo Oficial</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="email"
+                      value={PRIMARY_ADMIN_EMAIL}
+                      readOnly
+                      className="w-full rounded-xl bg-white/5 border border-white/20 px-3.5 py-2.5 text-sm text-[#00E5FF] font-mono font-bold pl-10 cursor-default select-all"
+                    />
+                    <Mail className="w-4 h-4 text-[#00E5FF] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  </div>
                 </div>
 
                 <div>
-                  <h3 className="text-base sm:text-lg font-bold text-white font-['Outfit']">
-                    Acesso Restrito ao Administrador
-                  </h3>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Digite sua senha para desbloquear as ferramentas administrativas.
-                  </p>
-                </div>
-
-                <form onSubmit={handleLogin} className="space-y-3 text-left">
+                  <label className="block text-xs font-semibold text-gray-300 mb-1">
+                    Senha de Administrador:
+                  </label>
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
                       value={passwordInput}
                       onChange={(e) => setPasswordInput(e.target.value)}
-                      placeholder="Digite sua senha de acesso"
+                      placeholder="Digite sua senha cadastrada"
                       required
-                      className="w-full text-center tracking-wider font-mono rounded-xl bg-white/5 border border-white/20 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#00E5FF] pr-10"
+                      className="w-full rounded-xl bg-white/5 border border-white/20 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-[#00E5FF] transition pl-10 pr-10"
                       autoFocus
                     />
+                    <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                      title={showPassword ? 'Ocultar senha' : 'Ver senha'}
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                </div>
 
-                  {authError && (
-                    <div className="p-2.5 rounded-xl bg-red-500/15 border border-red-500/30 text-xs text-red-300 flex items-center gap-1.5">
-                      <AlertCircle className="w-4 h-4 shrink-0" />
-                      <span>{authError}</span>
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 rounded-xl bg-[#00E5FF] hover:bg-[#00E5FF]/90 text-[#0B132B] font-extrabold text-sm font-['Outfit'] transition shadow-[0_0_20px_rgba(0,229,255,0.25)]"
-                  >
-                    Entrar no Painel ADM
-                  </button>
-
-                  <div className="text-center pt-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsSetupMode(true);
-                        setAuthError(null);
-                      }}
-                      className="text-xs text-gray-400 hover:text-[#00E5FF] underline"
-                    >
-                      Configurar ou redefinir senha mestra
-                    </button>
+                {authError && (
+                  <div className="p-2.5 rounded-xl bg-red-500/15 border border-red-500/30 text-xs text-red-300 flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{authError}</span>
                   </div>
-                </form>
-              </div>
-            )}
+                )}
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 rounded-xl bg-[#00E5FF] hover:bg-[#00E5FF]/90 text-[#0B132B] font-extrabold text-sm font-['Outfit'] transition shadow-[0_0_20px_rgba(0,229,255,0.25)] flex items-center justify-center gap-2"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Entrar no Painel ADM</span>
+                </button>
+
+                <div className="relative my-3">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-white/10" />
+                  </div>
+                  <div className="relative flex justify-center text-[10px] uppercase">
+                    <span className="bg-[#0B132B] px-2 text-gray-400">ou entrar com 1 clique</span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleGoogleLogin}
+                  disabled={isGoogleLoading}
+                  className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white font-bold text-xs transition flex items-center justify-center gap-2.5 disabled:opacity-50"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                  </svg>
+                  <span>{isGoogleLoading ? 'Verificando Conta Google...' : 'Entrar com Conta Google (tecsolucoeshub@gmail.com)'}</span>
+                </button>
+
+                <p className="text-[11px] text-gray-500 text-center pt-1">
+                  Acesso estritamente restrito. Tentativas de acesso não autorizadas são bloqueadas.
+                </p>
+              </form>
+            </div>
           </div>
         ) : (
           /* Authenticated Dashboard */
@@ -655,9 +658,9 @@ export const AdminModal: React.FC<AdminModalProps> = ({
             <div className="mb-4 p-3 rounded-xl bg-[#00E5FF]/10 border border-[#00E5FF]/30 flex items-start gap-2.5 text-xs text-gray-300 shrink-0">
               <Key className="w-4 h-4 text-[#00E5FF] shrink-0 mt-0.5" />
               <div>
-                <strong className="text-[#00E5FF]">Atalhos de Acesso Rápido para você (ADM):</strong>
+                <strong className="text-[#00E5FF]">Atalhos de Acesso Exclusivos para você (Administrador):</strong>
                 <p className="mt-0.5 text-gray-400 leading-tight">
-                  O botão público de ADM foi ocultado dos visitantes. Você pode abrir este painel a qualquer momento usando as teclas <kbd className="px-1.5 py-0.5 rounded bg-black/50 text-white font-mono font-bold">Ctrl + Shift + A</kbd> (ou <kbd className="px-1.5 py-0.5 rounded bg-black/50 text-white font-mono font-bold">Alt + A</kbd>), adicionando <code className="text-[#00E5FF]">#admin</code> na URL, ou clicando no ponto <code className="text-white">•</code> junto ao copyright no rodapé.
+                  O botão público foi 100% removido do site. Para abrir este painel, use o atalho <kbd className="px-1.5 py-0.5 rounded bg-black/50 text-white font-mono font-bold">Ctrl + Shift + A</kbd> (ou <kbd className="px-1.5 py-0.5 rounded bg-black/50 text-white font-mono font-bold">Alt + A</kbd>) no teclado, ou acesse digitando a hash secreta <code className="text-[#00E5FF]">#gestao-tecsolucoes</code> no final do endereço do seu site.
                 </p>
               </div>
             </div>
@@ -1271,21 +1274,43 @@ export const AdminModal: React.FC<AdminModalProps> = ({
               {activeTab === 'settings' && (
                 <div className="space-y-6">
                   {/* Section A: Security & Change Master Password */}
-                  <form onSubmit={handleChangePassword} className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-3">
-                    <div className="flex items-center gap-2 text-[#00E5FF]">
-                      <Key className="w-4 h-4" />
-                      <h4 className="text-xs font-bold uppercase tracking-wider">
-                        Alterar Senha do Administrador
-                      </h4>
+                  <form onSubmit={handleChangePassword} className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-3.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-[#00E5FF]">
+                        <Key className="w-4 h-4" />
+                        <h4 className="text-xs font-bold uppercase tracking-wider font-['Outfit']">
+                          Segurança do Administrador Principal
+                        </h4>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/40 flex items-center gap-1">
+                        <ShieldCheck className="w-3 h-3" />
+                        {PRIMARY_ADMIN_EMAIL}
+                      </span>
                     </div>
+
+                    <div className="p-3 rounded-xl bg-black/30 border border-white/10 flex items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-[#00E5FF]/15 border border-[#00E5FF]/30 flex items-center justify-center text-[#00E5FF] shrink-0">
+                          <Mail className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-white font-['Outfit']">Administrador Master Vinculado</div>
+                          <div className="text-[11px] text-gray-400 font-mono">{PRIMARY_ADMIN_EMAIL}</div>
+                        </div>
+                      </div>
+                      <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
+                        Acesso Exclusivo
+                      </span>
+                    </div>
+
                     <p className="text-xs text-gray-400">
-                      Atualize sua senha mestra de acesso para a que você desejar a qualquer momento.
+                      Altere a senha mestra de acesso ao painel. Apenas o administrador oficial {PRIMARY_ADMIN_EMAIL} pode autorizar esta alteração.
                     </p>
 
                     {passwordChangeSuccess && (
                       <div className="p-2.5 rounded-xl bg-green-500/20 border border-green-500/40 text-xs text-green-300 flex items-center gap-2">
                         <CheckCircle2 className="w-4 h-4 shrink-0" />
-                        <span>Senha mestra atualizada e salva com sucesso!</span>
+                        <span>Senha mestra atualizada e salva na nuvem com sucesso!</span>
                       </div>
                     )}
 
@@ -1296,10 +1321,24 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                       </div>
                     )}
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <label className="block text-xs text-gray-300 mb-1">
-                          Nova Senha de ADM:
+                          Senha Atual de ADM:
+                        </label>
+                        <input
+                          type="password"
+                          value={currentPasswordForChange}
+                          onChange={(e) => setCurrentPasswordForChange(e.target.value)}
+                          placeholder="Sua senha atual"
+                          required
+                          className="w-full rounded-lg bg-[#0B132B] border border-white/15 px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00E5FF]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-gray-300 mb-1">
+                          Nova Senha (mín. 6 dígitos):
                         </label>
                         <input
                           type="password"
@@ -1307,6 +1346,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                           onChange={(e) => setNewMasterPassword(e.target.value)}
                           placeholder="Digite nova senha"
                           required
+                          minLength={6}
                           className="w-full rounded-lg bg-[#0B132B] border border-white/15 px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00E5FF]"
                         />
                       </div>
@@ -1321,6 +1361,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                           onChange={(e) => setConfirmMasterPassword(e.target.value)}
                           placeholder="Repita a nova senha"
                           required
+                          minLength={6}
                           className="w-full rounded-lg bg-[#0B132B] border border-white/15 px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00E5FF]"
                         />
                       </div>
@@ -1329,10 +1370,10 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                     <div className="flex justify-end pt-1">
                       <button
                         type="submit"
-                        className="px-4 py-2 rounded-xl bg-[#00E5FF] hover:bg-[#00E5FF]/90 text-[#0B132B] font-bold text-xs font-['Outfit'] transition flex items-center gap-1.5"
+                        className="px-4 py-2 rounded-xl bg-[#00E5FF] hover:bg-[#00E5FF]/90 text-[#0B132B] font-bold text-xs font-['Outfit'] transition flex items-center gap-1.5 shadow-[0_0_15px_rgba(0,229,255,0.25)]"
                       >
                         <Key className="w-3.5 h-3.5" />
-                        <span>Salvar Nova Senha</span>
+                        <span>Atualizar Senha de Administrador</span>
                       </button>
                     </div>
                   </form>

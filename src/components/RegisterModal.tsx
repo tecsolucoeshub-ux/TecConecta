@@ -34,7 +34,7 @@ interface RegisterModalProps {
 }
 
 type AuthMethod = 'google' | 'email';
-type BusinessProfileType = 'autonomo' | 'mei' | 'empresa_grande';
+type BusinessProfileType = 'autonomo' | 'mei';
 
 export const RegisterModal: React.FC<RegisterModalProps> = ({
   isOpen,
@@ -197,12 +197,6 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     e.preventDefault();
     if (isSubmitting) return;
     setErrorMessage(null);
-
-    // Filter check: Large corporations are rejected!
-    if (businessProfile === 'empresa_grande') {
-      setErrorMessage('O TecConecta é exclusivo para profissionais autônomos e MEIs. Empresas médias ou grandes não são aceitas.');
-      return;
-    }
 
     if (!ownerEmail.trim()) {
       setErrorMessage('Informe seu e-mail ou conecte com sua conta Google para gerenciar seu anúncio.');
@@ -411,21 +405,21 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               <span className="text-[10px] text-[#00E5FF] font-semibold">Exclusivo Autônomo / MEI</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {/* Opção 1: Autônomo */}
               <div
                 onClick={() => setBusinessProfile('autonomo')}
-                className={`p-2.5 rounded-xl border cursor-pointer transition text-left ${
+                className={`p-3 rounded-xl border cursor-pointer transition text-left ${
                   businessProfile === 'autonomo'
                     ? 'bg-[#00E5FF]/15 border-[#00E5FF] shadow-[0_0_12px_rgba(0,229,255,0.2)]'
                     : 'bg-white/5 border-white/10 hover:border-white/20'
                 }`}
               >
-                <div className="flex items-center gap-1.5">
-                  <span className="text-base">🧑‍🔧</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">👨‍🔧</span>
                   <strong className="text-xs text-white">Autônomo</strong>
                 </div>
-                <p className="text-[10px] text-gray-400 mt-1 leading-tight">
+                <p className="text-[11px] text-gray-400 mt-1 leading-tight">
                   Trabalhador independente sem CNPJ ou com CPF.
                 </p>
               </div>
@@ -433,52 +427,21 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               {/* Opção 2: MEI */}
               <div
                 onClick={() => setBusinessProfile('mei')}
-                className={`p-2.5 rounded-xl border cursor-pointer transition text-left ${
+                className={`p-3 rounded-xl border cursor-pointer transition text-left ${
                   businessProfile === 'mei'
                     ? 'bg-[#00E5FF]/15 border-[#00E5FF] shadow-[0_0_12px_rgba(0,229,255,0.2)]'
                     : 'bg-white/5 border-white/10 hover:border-white/20'
                 }`}
               >
-                <div className="flex items-center gap-1.5">
-                  <span className="text-base">💼</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">💼</span>
                   <strong className="text-xs text-white">MEI</strong>
                 </div>
-                <p className="text-[10px] text-gray-400 mt-1 leading-tight">
+                <p className="text-[11px] text-gray-400 mt-1 leading-tight">
                   Microempreendedor Individual (até 1 colaborador).
                 </p>
               </div>
-
-              {/* Opção 3: Empresa Média/Grande (Bloqueada) */}
-              <div
-                onClick={() => setBusinessProfile('empresa_grande')}
-                className={`p-2.5 rounded-xl border cursor-pointer transition text-left ${
-                  businessProfile === 'empresa_grande'
-                    ? 'bg-red-500/20 border-red-500 shadow-[0_0_12px_rgba(239,68,68,0.3)]'
-                    : 'bg-white/5 border-white/10 hover:border-white/20'
-                }`}
-              >
-                <div className="flex items-center gap-1.5">
-                  <span className="text-base">🏢</span>
-                  <strong className="text-xs text-white">Empresa Grande</strong>
-                </div>
-                <p className="text-[10px] text-gray-400 mt-1 leading-tight">
-                  Sociedades LTDA, S.A., redes ou franquias.
-                </p>
-              </div>
             </div>
-
-            {/* Aviso de Inelegibilidade se selecionar Empresa Grande */}
-            {businessProfile === 'empresa_grande' && (
-              <div className="p-3 rounded-xl bg-red-500/20 border border-red-500/50 text-red-200 text-xs flex items-start gap-2 animate-fadeIn">
-                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                <div>
-                  <strong className="text-red-300 block">Cadastro Não Elegível para Empresas Grandes:</strong>
-                  <p className="mt-0.5 text-[11px] text-red-200/90 leading-relaxed">
-                    A proposta do TecConecta (TecSoluções) é fortalecer especificamente prestadores autônomos e MEIs locais. Médias e grandes empresas podem solicitar anúncios especiais diretamente com a administração através do banner patrocinado.
-                  </p>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* 3. Nome do Negócio / Profissional */}
@@ -693,12 +656,8 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           <div className="pt-2">
             <button
               type="submit"
-              disabled={isSubmitting || businessProfile === 'empresa_grande'}
-              className={`w-full py-3 rounded-xl font-['Outfit'] font-bold text-sm transition flex items-center justify-center gap-2 ${
-                businessProfile === 'empresa_grande'
-                  ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-[#00E5FF] to-[#FF6B00] text-[#0B132B] hover:brightness-110 shadow-[0_0_25px_rgba(0,229,255,0.3)]'
-              }`}
+              disabled={isSubmitting}
+              className="w-full py-3 rounded-xl font-['Outfit'] font-bold text-sm transition flex items-center justify-center gap-2 bg-gradient-to-r from-[#00E5FF] to-[#FF6B00] text-[#0B132B] hover:brightness-110 shadow-[0_0_25px_rgba(0,229,255,0.3)] disabled:opacity-50"
             >
               {isSubmitting ? (
                 <>

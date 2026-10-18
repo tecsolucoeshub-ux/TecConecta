@@ -177,10 +177,14 @@ export async function submitProviderReview(
     newAverage = Math.round(((prevRating * prevCount + sanitizedRating) / newCount) * 10) / 10;
   }
 
-  // 2. Persist review to local storage
-  const allReviews = getAllStoredReviews();
-  localStorage.setItem(LOCAL_STORAGE_REVIEWS_KEY, JSON.stringify([newReview, ...allReviews]));
-  markUserReviewedProvider(provider.id);
+  // 2. Persist review to local storage safely
+  try {
+    const allReviews = getAllStoredReviews();
+    localStorage.setItem(LOCAL_STORAGE_REVIEWS_KEY, JSON.stringify([newReview, ...allReviews]));
+    markUserReviewedProvider(provider.id);
+  } catch (err) {
+    console.warn('Could not persist review to localStorage:', err);
+  }
 
   // 3. Persist review to Firestore
   try {

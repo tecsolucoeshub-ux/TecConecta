@@ -91,17 +91,6 @@ export const Footer: React.FC<FooterProps> = ({
         <div className="mt-5 pt-4 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-400">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span>© {new Date().getFullYear()} TecConecta. Criado e mantido por TecSoluções. Todos os direitos reservados.</span>
-            {onOpenAdmin && (
-              <button
-                type="button"
-                onClick={onOpenAdmin}
-                className="text-gray-600 hover:text-gray-400 transition cursor-default p-0.5 select-none"
-                title=""
-                aria-label=""
-              >
-                •
-              </button>
-            )}
           </div>
           <div className="flex items-center gap-4 flex-wrap">
             <button onClick={onOpenPrivacyPolicy} className="hover:text-white transition">
@@ -110,16 +99,6 @@ export const Footer: React.FC<FooterProps> = ({
             <button onClick={onOpenPrivacyPolicy} className="hover:text-white transition">
               Isenção de Responsabilidade
             </button>
-            {onOpenAdmin && (
-              <button
-                type="button"
-                onClick={onOpenAdmin}
-                className="text-gray-500 hover:text-[#00E5FF] transition flex items-center gap-1 font-medium"
-                title="Acesso ao Painel do Administrador (Ctrl+Shift+A)"
-              >
-                <span>Painel ADM</span>
-              </button>
-            )}
           </div>
         </div>
       </div>

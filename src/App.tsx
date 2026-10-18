@@ -27,10 +27,10 @@ import { InteractiveMap } from './components/InteractiveMap';
 import { RegisterModal } from './components/RegisterModal';
 import { PrivacyPolicyModal } from './components/PrivacyPolicyModal';
 import { ReviewModal } from './components/ReviewModal';
-import { LocalityModal, LocalityInfo, LocalityCityOption } from './components/LocalityModal';
+import { LocalityModal, LocalityInfo } from './components/LocalityModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { Footer } from './components/Footer';
-import { fetchAddressByCep, CITY_CENTROIDS, normalizeCityName } from './utils/cepGeocoding';
+import { fetchAddressByCep } from './utils/cepGeocoding';
 import { useTheme } from './context/ThemeContext';
 import { buildWhatsAppUrl } from './utils/whatsapp';
 import { matchesProviderSearch } from './utils/search';
@@ -203,14 +203,23 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
 
-    // Hidden trigger 2: Hash trigger in URL (#admin or #adm)
+    // Hidden trigger 2: Secret hash trigger in URL (#gestao-tecsolucoes, #admin-tecsolucoes, etc.)
     const handleHashCheck = () => {
-      if (window.location.hash === '#admin' || window.location.hash === '#adm') {
-        setIsAdminOpen(true);
-        try {
-          history.replaceState(null, '', window.location.pathname + window.location.search);
-        } catch {}
-      }
+      try {
+        const h = (window.location.hash || '').toLowerCase();
+        if (
+          h === '#gestao-tecsolucoes' ||
+          h === '#admin-tecsolucoes' ||
+          h === '#gestao' ||
+          h === '#admin' ||
+          h === '#adm'
+        ) {
+          setIsAdminOpen(true);
+          try {
+            history.replaceState(null, '', window.location.pathname + window.location.search);
+          } catch {}
+        }
+      } catch {}
     };
     window.addEventListener('hashchange', handleHashCheck);
     handleHashCheck();
@@ -247,72 +256,15 @@ export default function App() {
     setTimeout(() => setLocationStatus(null), 3000);
   };
 
-  // Dynamic list of cities according to CEP registered by real advertisers
-  const availableCities = useMemo<LocalityCityOption[]>(() => {
-    const cityMap = new Map<string, { lat: number; lng: number; count: number; name: string }>();
-
-    for (const p of providers) {
-      if (!p || !p.city) continue;
-      const rawCity = p.city.trim();
-      if (!rawCity || rawCity.toLowerCase() === 'undefined' || rawCity.toLowerCase() === 'null') continue;
-
-      const key = rawCity.toLowerCase();
-      const existing = cityMap.get(key);
-      const hasCoords = typeof p.lat === 'number' && typeof p.lng === 'number' && !isNaN(p.lat) && !isNaN(p.lng) && (p.lat !== 0 || p.lng !== 0);
-
-      // Determine accurate coordinates using provider coords or known city centroid
-      let cityLat = hasCoords ? p.lat : -17.7915;
-      let cityLng = hasCoords ? p.lng : -50.9201;
-
-      const norm = normalizeCityName(rawCity);
-      if (!hasCoords && CITY_CENTROIDS[norm]) {
-        cityLat = CITY_CENTROIDS[norm].lat;
-        cityLng = CITY_CENTROIDS[norm].lng;
-      }
-
-      if (existing) {
-        existing.count += 1;
-        if ((existing.lat === -17.7915 && existing.lng === -50.9201) && hasCoords) {
-          existing.lat = p.lat;
-          existing.lng = p.lng;
-        }
-      } else {
-        cityMap.set(key, {
-          name: rawCity,
-          lat: cityLat,
-          lng: cityLng,
-          count: 1
-        });
-      }
-    }
-
-    // Always ensure Rio Verde - GO (headquarters of TecSoluções) is present if empty
-    if (!cityMap.has('rio verde - go') && !cityMap.has('rio verde')) {
-      cityMap.set('rio verde - go', {
-        name: 'Rio Verde - GO',
-        lat: -17.7915,
-        lng: -50.9201,
-        count: 0
-      });
-    }
-
-    return Array.from(cityMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-  }, [providers]);
-
   // City selector change
   const handleSelectCityChange = (cityName: string) => {
     setSelectedCity(cityName);
-    setSelectedProvider(null);
     if (cityName === 'all') {
       if (activeLocality?.source === 'city') {
         handleClearLocality();
       }
     } else {
-      const found = availableCities.find(
-        (c) => c.name.toLowerCase() === cityName.toLowerCase() ||
-               c.name.toLowerCase().includes(cityName.toLowerCase()) ||
-               cityName.toLowerCase().includes(c.name.toLowerCase())
-      );
+      const found = POPULAR_CITIES.find(c => c.name.toLowerCase().includes(cityName.toLowerCase()));
       if (found) {
         const loc: LocalityInfo = {
           label: found.name,
@@ -394,15 +346,9 @@ export default function App() {
     let result = providers.filter((p) => {
       if (!p || !p.id) return false;
       // City filter - If user is actively typing a service query, allow broad matching without locking/fixing search
-      const pCity = (p.city || '').toLowerCase().trim();
-      if (selectedCity !== 'all' && !searchQuery.trim()) {
-        const sel = selectedCity.toLowerCase().trim();
-        const cityOnly = sel.split('-')[0].trim();
-        const pCityOnly = pCity.split('-')[0].trim();
-        const matches = pCity.includes(sel) || sel.includes(pCity) || (cityOnly && pCityOnly && (pCityOnly.includes(cityOnly) || cityOnly.includes(pCityOnly)));
-        if (!matches) {
-          return false;
-        }
+      const pCity = (p.city || '').toLowerCase();
+      if (selectedCity !== 'all' && !searchQuery.trim() && !pCity.includes(selectedCity.toLowerCase())) {
+        return false;
       }
 
       // Robust search query matching (accent-insensitive, multi-token across name, category, city, neighborhood, description)
@@ -453,12 +399,12 @@ export default function App() {
       return { lat: activeLocality.lat, lng: activeLocality.lng };
     }
     const firstWithValidCoords = filteredProviders.find(
-      (p) => typeof p?.lat === 'number' && typeof p?.lng === 'number' && !isNaN(p.lat) && !isNaN(p.lng) && (p.lat !== 0 || p.lng !== 0)
+      (p) => typeof p?.lat === 'number' && typeof p?.lng === 'number' && !isNaN(p.lat) && !isNaN(p.lng)
     );
     if (firstWithValidCoords) {
       return { lat: firstWithValidCoords.lat, lng: firstWithValidCoords.lng };
     }
-    return { lat: -17.7915, lng: -50.9201 }; // Rio Verde - GO (Sede TecSoluções)
+    return { lat: -23.55052, lng: -46.633308 }; // São Paulo default
   }, [selectedProvider, userCoords, activeLocality, filteredProviders]);
 
   const handleProviderCreated = (newP: Provider) => {
@@ -486,22 +432,9 @@ export default function App() {
   };
 
   const handleFocusOnMap = (p: Provider) => {
-    // If a specific city filter was active that excludes this provider, reset to 'all' so the pin and card are present
-    if (selectedCity !== 'all') {
-      const pCity = (p.city || '').toLowerCase();
-      const selCity = selectedCity.toLowerCase();
-      if (!pCity.includes(selCity) && !selCity.includes(pCity)) {
-        setSelectedCity('all');
-      }
-    }
     setSelectedProvider(p);
     setViewMode('map');
-    const switcherEl = document.getElementById('view-switcher-container');
-    if (switcherEl) {
-      switcherEl.scrollIntoView({ behavior: 'smooth' });
-    } else {
-      window.scrollTo({ top: 120, behavior: 'smooth' });
-    }
+    window.scrollTo({ top: 120, behavior: 'smooth' });
   };
 
   return (
@@ -622,10 +555,10 @@ export default function App() {
                     : 'bg-[#111B3D] border-white/15 text-white'
                 }`}
               >
-                <option value="all">Todas as Cidades ({providers.length})</option>
-                {availableCities.map((c) => (
+                <option value="all">Todas as Cidades</option>
+                {POPULAR_CITIES.map((c) => (
                   <option key={c.name} value={c.name}>
-                    {c.name} {c.count && c.count > 0 ? `(${c.count})` : ''}
+                    {c.name}
                   </option>
                 ))}
               </select>
@@ -719,15 +652,27 @@ export default function App() {
                     Tente buscar por outro termo, profissão ou selecionar outra cidade.
                   </p>
                 </div>
-                <button
-                  onClick={() => {
-                    setSearchQuery('');
-                    setSelectedCity('all');
-                  }}
-                  className="px-4 py-2 rounded-xl bg-white/10 text-white text-xs font-semibold hover:bg-white/15 transition"
-                >
-                  Restaurar Filtros e Ver Todos
-                </button>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-2">
+                  <button
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSelectedCity('all');
+                      handleClearLocality();
+                    }}
+                    className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/10 text-white text-xs font-semibold hover:bg-white/15 transition"
+                  >
+                    Restaurar Filtros e Ver Todos
+                  </button>
+                  {(!providers || providers.length === 0 || !providers.some(isDemoProvider)) && (
+                    <button
+                      onClick={handleResetDemoData}
+                      className="w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-r from-[#00E5FF] to-[#FF6B00] text-[#0B132B] text-xs font-extrabold hover:brightness-110 transition flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(0,229,255,0.3)]"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Restaurar Catálogo Exemplo</span>
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-5">
@@ -872,7 +817,6 @@ export default function App() {
         currentLocality={activeLocality}
         onSelectLocality={handleSelectLocality}
         onClearLocality={handleClearLocality}
-        availableCities={availableCities}
       />
 
       {/* Simplified Provider Registration Modal (1 Minuto) */}

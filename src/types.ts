@@ -58,6 +58,8 @@ export interface AdminSettings {
   bannerHeadline: string;
   bannerSubtext: string;
   adminPin: string;
+  adminEmail: string;
+  adminPasswordConfigured?: boolean;
 }
 
 export type ViewMode = 'list' | 'map';

@@ -12,7 +12,7 @@ import {
   increment,
   getDocFromServer
 } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import { Provider, SponsoredBanner, AdminSettings } from '../types';
 import { SEED_PROVIDERS } from '../data/seedProviders';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -135,6 +135,22 @@ export function safeLocalStorageSet(key: string, value: string): void {
       // Gracefully continue in memory
     }
   }
+}
+
+export function safeLocalStorageGet(key: string): string | null {
+  try {
+    return typeof window !== 'undefined' && window.localStorage ? localStorage.getItem(key) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function safeLocalStorageRemove(key: string): void {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.removeItem(key);
+    }
+  } catch {}
 }
 
 // Known initial demo/mock provider IDs
@@ -264,8 +280,8 @@ export function deduplicateProviders(list: Provider[]): Provider[] {
 export function getStoredProviders(): Provider[] {
   try {
     const deletedIds = getDeletedProviderIds();
-    const isDemoCleared = localStorage.getItem(LOCAL_STORAGE_DEMO_CLEARED_KEY) === 'true';
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    const isDemoCleared = safeLocalStorageGet(LOCAL_STORAGE_DEMO_CLEARED_KEY) === 'true';
+    const raw = safeLocalStorageGet(LOCAL_STORAGE_KEY);
 
     if (raw !== null) {
       const parsed = JSON.parse(raw);
@@ -319,7 +335,7 @@ export function sanitizeForFirestore(data: any): any {
 let isSeedingProviders = false;
 async function seedInitialProvidersIfEmpty() {
   if (isSeedingProviders) return;
-  const isDemoCleared = localStorage.getItem(LOCAL_STORAGE_DEMO_CLEARED_KEY) === 'true';
+  const isDemoCleared = safeLocalStorageGet(LOCAL_STORAGE_DEMO_CLEARED_KEY) === 'true';
   if (isDemoCleared) {
     // If demo has been cleared, only ensure TecSoluções official profile is present
     try {
@@ -391,7 +407,7 @@ export function subscribeToProviders(
     providersRef,
     (snapshot) => {
       const deletedIds = getDeletedProviderIds();
-      const isDemoCleared = localStorage.getItem(LOCAL_STORAGE_DEMO_CLEARED_KEY) === 'true';
+      const isDemoCleared = safeLocalStorageGet(LOCAL_STORAGE_DEMO_CLEARED_KEY) === 'true';
 
       if (snapshot.empty) {
         if (!isDemoCleared) {
@@ -512,6 +528,12 @@ export function subscribeToAdminSettings(
     (docSnap) => {
       if (docSnap.exists()) {
         const remote = { ...DEFAULT_ADMIN_SETTINGS, ...(docSnap.data() as AdminSettings) };
+        if (remote.adminPin === 'admin123') {
+          remote.adminPin = '';
+          remote.adminPasswordConfigured = false;
+        }
+        // Strictly enforce official primary admin email
+        remote.adminEmail = PRIMARY_ADMIN_EMAIL;
         safeLocalStorageSet(LOCAL_STORAGE_ADMIN_KEY, JSON.stringify(remote));
         callback(remote);
       } else {
@@ -769,7 +791,7 @@ export const SEED_BANNERS: SponsoredBanner[] = [
 
 function getStoredBanners(): SponsoredBanner[] {
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_BANNERS_KEY);
+    const raw = safeLocalStorageGet(LOCAL_STORAGE_BANNERS_KEY);
     if (raw !== null) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
@@ -853,29 +875,72 @@ export async function deleteSponsoredBanner(id: string): Promise<boolean> {
 // ----------------------------------------------------
 // ADMIN SETTINGS & PLATFORM CONFIGURATION
 // ----------------------------------------------------
+export const PRIMARY_ADMIN_EMAIL = 'tecsolucoeshub@gmail.com';
+export const DEFAULT_SECURE_ADMIN_PIN = 'TecConecta@2026!';
+
 export const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
   admWhatsapp: '64999317499',
   admName: 'Departamento Administrativo TecSoluções',
   bannerHeadline: 'Anuncie Sua Empresa Aqui',
   bannerSubtext: 'Entre em contato com o departamento administrativo e destaque sua marca para milhares de clientes locais.',
-  adminPin: 'admin123'
+  adminPin: DEFAULT_SECURE_ADMIN_PIN,
+  adminEmail: PRIMARY_ADMIN_EMAIL,
+  adminPasswordConfigured: true
 };
 
 function getStoredAdminSettings(): AdminSettings {
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_ADMIN_KEY);
+    const raw = safeLocalStorageGet(LOCAL_STORAGE_ADMIN_KEY);
     if (raw) {
       const parsed = { ...DEFAULT_ADMIN_SETTINGS, ...JSON.parse(raw) };
       if (parsed.admWhatsapp === '11999999999' || parsed.admWhatsapp.includes('99999999')) {
         parsed.admWhatsapp = '64999317499';
-        safeLocalStorageSet(LOCAL_STORAGE_ADMIN_KEY, JSON.stringify(parsed));
       }
+      // Security purge: invalidate legacy dummy password 'admin123' or empty passwords
+      if (!parsed.adminPin || parsed.adminPin === 'admin123' || parsed.adminPin.trim() === '') {
+        parsed.adminPin = DEFAULT_SECURE_ADMIN_PIN;
+        parsed.adminPasswordConfigured = true;
+      }
+      // Strictly enforce official primary admin email
+      parsed.adminEmail = PRIMARY_ADMIN_EMAIL;
+      safeLocalStorageSet(LOCAL_STORAGE_ADMIN_KEY, JSON.stringify(parsed));
       return parsed;
     }
   } catch (e) {
     console.error('Error reading admin settings:', e);
   }
   return DEFAULT_ADMIN_SETTINGS;
+}
+
+/**
+ * Sign in admin using Google OAuth via Firebase Auth.
+ * Strictly verifies that the authenticated Google account is tecsolucoeshub@gmail.com.
+ */
+export async function signInAdminWithGoogle(): Promise<{ success: boolean; email?: string; error?: string }> {
+  if (!auth) {
+    return { success: false, error: 'Firebase Auth não inicializado no navegador.' };
+  }
+  try {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    const result = await signInWithPopup(auth, provider);
+    const email = result.user?.email?.toLowerCase().trim();
+    if (email === PRIMARY_ADMIN_EMAIL.toLowerCase()) {
+      return { success: true, email };
+    } else {
+      await signOut(auth);
+      return {
+        success: false,
+        error: `Acesso negado: O e-mail Google "${result.user?.email || 'desconhecido'}" não possui privilégios de Administrador. Apenas ${PRIMARY_ADMIN_EMAIL} é autorizado.`
+      };
+    }
+  } catch (err: any) {
+    console.warn('[TecConecta] Google Sign-in error:', err);
+    return {
+      success: false,
+      error: err?.message || 'Falha ao autenticar com a Conta Google.'
+    };
+  }
 }
 
 export function fetchAdminSettings(): AdminSettings {
