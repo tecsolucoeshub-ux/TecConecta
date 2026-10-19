@@ -82,7 +82,7 @@ export const MonetizationBanner: React.FC<MonetizationBannerProps> = ({
         {/* BANNER 1 (SLOT ESQUERDO)                                */}
         {/* ======================================================== */}
         <div
-          className={`relative rounded-2xl overflow-hidden border p-2.5 sm:p-3 transition-all duration-300 flex flex-col justify-between ${
+          className={`relative rounded-2xl overflow-hidden border p-3 sm:p-3.5 transition-all duration-300 flex flex-col justify-between ${
             isLight
               ? 'bg-gradient-to-r from-orange-50/90 via-white to-orange-50/40 border-orange-200/90 shadow-sm'
               : 'border-[#FF6B00]/30 bg-gradient-to-r from-[#0C1530] via-[#111F45] to-[#1A1A3A] shadow-[0_0_20px_rgba(255,107,0,0.08)]'
@@ -96,7 +96,7 @@ export const MonetizationBanner: React.FC<MonetizationBannerProps> = ({
               {/* Header: Badge & Category */}
               <div className="flex items-center justify-between gap-1.5 text-[9.5px]">
                 <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                  <span className="font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#FF6B00]/20 text-[#FF6B00] border border-[#FF6B00]/40 shrink-0">
+                  <span className="font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#FF6B00]/20 text-[#FF6B00] border border-[#FF6B00]/40 shrink-0 text-[8.5px]">
                     {slot1Banner.badgeText || 'Patrocinador Oficial'}
                   </span>
                   {slot1Banner.category && (
@@ -125,15 +125,15 @@ export const MonetizationBanner: React.FC<MonetizationBannerProps> = ({
                 </a>
               </div>
 
-              {/* Main Content & Actions Row */}
-              <div className="flex items-center justify-between gap-2.5">
-                {/* Photo / Logo */}
-                {slot1Banner.imageUrl && !imageErrorMap[slot1Banner.id] ? (
-                  <div className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-xl overflow-hidden border-2 border-[#FF6B00]/50 shadow-[0_0_12px_rgba(255,107,0,0.2)] shrink-0 bg-black/40 group">
+              {/* Main Content & Actions: Rectangular Sponsor Banner + Proportional Compact Text */}
+              <div className="flex items-center gap-3 sm:gap-3.5 mt-0.5">
+                {/* Photo / Banner (Retângulo com Alta Visibilidade para o Patrocinador) */}
+                <div className="relative w-36 sm:w-52 md:w-44 lg:w-56 h-24 sm:h-28 md:h-28 lg:h-32 rounded-xl overflow-hidden border border-[#FF6B00]/40 shadow-md shrink-0 bg-black/40 group">
+                  {slot1Banner.imageUrl && !imageErrorMap[slot1Banner.id] ? (
                     <img
                       src={slot1Banner.imageUrl}
                       alt={slot1Banner.companyName}
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                       onError={() => {
                         setImageErrorMap((prev) => ({ ...prev, [slot1Banner!.id]: true }));
                       }}
@@ -141,65 +141,68 @@ export const MonetizationBanner: React.FC<MonetizationBannerProps> = ({
                       loading="eager"
                       decoding="async"
                     />
-                  </div>
-                ) : (
-                  <div className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-xl overflow-hidden border border-[#FF6B00]/40 shrink-0 shadow-sm">
+                  ) : (
                     <img
                       src={generateFallbackBrandImage(slot1Banner.companyName, slot1Banner.category)}
                       alt={slot1Banner.companyName}
                       className="w-full h-full object-cover"
                       referrerPolicy="no-referrer"
                     />
+                  )}
+                  <div className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/75 backdrop-blur-sm text-[8px] font-bold text-[#FF6B00] border border-[#FF6B00]/30 pointer-events-none flex items-center gap-1">
+                    <Sparkles className="w-2.5 h-2.5 text-[#FF6B00]" />
+                    <span>Destaque</span>
                   </div>
-                )}
-
-                {/* Company Name & Headline */}
-                <div className="space-y-0.5 text-left flex-1 min-w-0">
-                  <h3
-                    className={`font-['Outfit'] text-xs sm:text-sm font-bold leading-tight truncate ${
-                      isLight ? 'text-slate-900' : 'text-white'
-                    }`}
-                  >
-                    {slot1Banner.companyName}:{' '}
-                    <span className={isLight ? 'text-[#0097A7] font-semibold' : 'text-[#00E5FF] font-medium'}>
-                      {slot1Banner.headline}
-                    </span>
-                  </h3>
-                  <p className={`text-[11px] line-clamp-1 ${isLight ? 'text-slate-600' : 'text-gray-300'}`}>
-                    {slot1Banner.subtext}
-                  </p>
                 </div>
 
-                {/* Contact Sponsor Button */}
-                <a
-                  href={buildWhatsAppUrl(
-                    slot1Banner.whatsapp,
-                    `Olá ${slot1Banner.companyName}, vi seu destaque no banner do TecConecta (TecSoluções)!`
-                  )}
-                  onClick={() => recordBannerClick(slot1Banner!.id)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1 transition shrink-0 shadow-sm ${
-                    isLight
-                      ? 'bg-white hover:bg-slate-50 border-slate-300 text-slate-800'
-                      : 'bg-white/10 hover:bg-white/20 border-white/20 text-white'
-                  }`}
-                  title="Falar com o patrocinador no WhatsApp"
-                >
-                  <MessageCircle className="w-3.5 h-3.5 text-[#25D366] shrink-0" />
-                  <span className="hidden sm:inline">WhatsApp</span>
-                </a>
+                {/* Company Name & Compact Text Column (Dimensionada para Máxima Harmonia) */}
+                <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5 space-y-1 text-left">
+                  <div>
+                    <h3
+                      className={`font-['Outfit'] text-xs sm:text-sm font-extrabold leading-tight truncate ${
+                        isLight ? 'text-slate-900' : 'text-white'
+                      }`}
+                    >
+                      {slot1Banner.companyName}
+                    </h3>
+                    <p className="text-[10px] sm:text-[11px] font-semibold text-[#FF6B00] leading-snug line-clamp-1 mt-0.5">
+                      {slot1Banner.headline}
+                    </p>
+                    <p className={`text-[9px] sm:text-[10px] leading-tight line-clamp-2 mt-0.5 opacity-90 ${isLight ? 'text-slate-600' : 'text-gray-300'}`}>
+                      {slot1Banner.subtext}
+                    </p>
+                  </div>
+
+                  {/* Contact Sponsor Button */}
+                  <a
+                    href={buildWhatsAppUrl(
+                      slot1Banner.whatsapp,
+                      `Olá ${slot1Banner.companyName}, vi seu destaque no banner do TecConecta (TecSoluções)!`
+                    )}
+                    onClick={() => recordBannerClick(slot1Banner!.id)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl bg-gradient-to-r from-[#25D366] to-[#128C7E] text-white text-[10px] sm:text-[11px] font-bold shadow-sm hover:brightness-110 active:scale-95 transition self-start shrink-0"
+                    title="Falar com o patrocinador no WhatsApp"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5 fill-white shrink-0" />
+                    <span>WhatsApp</span>
+                  </a>
+                </div>
               </div>
             </div>
           ) : (
             /* Empty Slot 1: Monetization Call */
-            <div className="relative flex items-center justify-between gap-3 h-full">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-[#FF6B00]/25 to-[#00E5FF]/20 border border-[#FF6B00]/40 flex items-center justify-center text-[#FF6B00] shadow-[0_0_12px_rgba(255,107,0,0.2)] shrink-0">
-                  <Megaphone className="w-4 h-4 animate-pulse" />
-                </div>
-                <div className="space-y-0.5 text-left min-w-0">
-                  <span className="text-[9px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#FF6B00]/20 text-[#FF6B00] border border-[#FF6B00]/30 inline-block">
+            <div className="relative flex items-center gap-3 sm:gap-3.5 h-full">
+              <div className="relative w-36 sm:w-52 md:w-44 lg:w-56 h-24 sm:h-28 md:h-28 lg:h-32 rounded-xl border border-dashed border-[#FF6B00]/40 bg-gradient-to-br from-[#FF6B00]/15 via-black/30 to-[#00E5FF]/10 flex flex-col items-center justify-center text-center p-2 shrink-0 group">
+                <Megaphone className="w-5 h-5 text-[#FF6B00] mb-1 animate-pulse" />
+                <span className="text-[9.5px] sm:text-[10px] font-extrabold text-[#FF6B00] uppercase font-['Outfit']">Espaço Patrocinado</span>
+                <span className="text-[8px] sm:text-[8.5px] text-gray-400">Banner Retangular</span>
+              </div>
+
+              <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5 space-y-1 text-left">
+                <div>
+                  <span className="text-[8px] sm:text-[8.5px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#FF6B00]/20 text-[#FF6B00] border border-[#FF6B00]/30 inline-block mb-0.5">
                     Espaço Destaque 1
                   </span>
                   <h3
@@ -209,23 +212,23 @@ export const MonetizationBanner: React.FC<MonetizationBannerProps> = ({
                   >
                     {adminSettings.bannerHeadline || 'Anuncie Sua Empresa Aqui'}
                   </h3>
-                  <p className={`text-[10.5px] truncate ${isLight ? 'text-slate-600' : 'text-gray-300'}`}>
+                  <p className={`text-[9px] sm:text-[10px] line-clamp-2 leading-tight mt-0.5 opacity-90 ${isLight ? 'text-slate-600' : 'text-gray-300'}`}>
                     {adminSettings.bannerSubtext || 'Espaço de alta visibilidade no topo do TecConecta.'}
                   </p>
                 </div>
-              </div>
 
-              <a
-                href={admContactUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#FF6B00] to-orange-500 hover:from-orange-500 hover:to-[#FF6B00] text-white font-bold text-xs font-['Outfit'] flex items-center justify-center gap-1 shadow-[0_0_12px_rgba(255,107,0,0.3)] transition transform hover:-translate-y-0.5 shrink-0 whitespace-nowrap"
-                title="Contatar comercial para anunciar neste espaço"
-              >
-                <Sparkles className="w-3 h-3 shrink-0" />
-                <span>Anuncie</span>
-                <ArrowUpRight className="w-3 h-3 shrink-0" />
-              </a>
+                <a
+                  href={admContactUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl bg-gradient-to-r from-[#FF6B00] to-orange-500 hover:from-orange-500 hover:to-[#FF6B00] text-white font-bold text-[10px] sm:text-[11px] font-['Outfit'] shadow-[0_0_12px_rgba(255,107,0,0.3)] transition transform hover:-translate-y-0.5 shrink-0 self-start"
+                  title="Contatar comercial para anunciar neste espaço"
+                >
+                  <Sparkles className="w-3 h-3 shrink-0" />
+                  <span>Anuncie</span>
+                  <ArrowUpRight className="w-3 h-3 shrink-0" />
+                </a>
+              </div>
             </div>
           )}
         </div>
@@ -234,7 +237,7 @@ export const MonetizationBanner: React.FC<MonetizationBannerProps> = ({
         {/* BANNER 2 (SLOT DIREITO)                                 */}
         {/* ======================================================== */}
         <div
-          className={`relative rounded-2xl overflow-hidden border p-2.5 sm:p-3 transition-all duration-300 flex flex-col justify-between ${
+          className={`relative rounded-2xl overflow-hidden border p-3 sm:p-3.5 transition-all duration-300 flex flex-col justify-between ${
             isLight
               ? 'bg-gradient-to-r from-cyan-50/90 via-white to-cyan-50/40 border-cyan-200/90 shadow-sm'
               : 'border-[#00E5FF]/30 bg-gradient-to-r from-[#081226] via-[#0E2042] to-[#141C38] shadow-[0_0_20px_rgba(0,229,255,0.08)]'
@@ -248,7 +251,7 @@ export const MonetizationBanner: React.FC<MonetizationBannerProps> = ({
               {/* Header: Badge & Category */}
               <div className="flex items-center justify-between gap-1.5 text-[9.5px]">
                 <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                  <span className="font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/40 shrink-0">
+                  <span className="font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/40 shrink-0 text-[8.5px]">
                     {slot2Banner.badgeText || 'Parceiro Destaque'}
                   </span>
                   {slot2Banner.category && (
@@ -277,15 +280,15 @@ export const MonetizationBanner: React.FC<MonetizationBannerProps> = ({
                 </a>
               </div>
 
-              {/* Main Content & Actions Row */}
-              <div className="flex items-center justify-between gap-2.5">
-                {/* Photo / Logo */}
-                {slot2Banner.imageUrl && !imageErrorMap[slot2Banner.id] ? (
-                  <div className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-xl overflow-hidden border-2 border-[#00E5FF]/50 shadow-[0_0_12px_rgba(0,229,255,0.2)] shrink-0 bg-black/40 group">
+              {/* Main Content & Actions: Rectangular Sponsor Banner + Proportional Compact Text */}
+              <div className="flex items-center gap-3 sm:gap-3.5 mt-0.5">
+                {/* Photo / Banner (Retângulo com Alta Visibilidade para o Patrocinador) */}
+                <div className="relative w-36 sm:w-52 md:w-44 lg:w-56 h-24 sm:h-28 md:h-28 lg:h-32 rounded-xl overflow-hidden border border-[#00E5FF]/40 shadow-md shrink-0 bg-black/40 group">
+                  {slot2Banner.imageUrl && !imageErrorMap[slot2Banner.id] ? (
                     <img
                       src={slot2Banner.imageUrl}
                       alt={slot2Banner.companyName}
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                       onError={() => {
                         setImageErrorMap((prev) => ({ ...prev, [slot2Banner!.id]: true }));
                       }}
@@ -293,65 +296,68 @@ export const MonetizationBanner: React.FC<MonetizationBannerProps> = ({
                       loading="eager"
                       decoding="async"
                     />
-                  </div>
-                ) : (
-                  <div className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-xl overflow-hidden border border-[#00E5FF]/40 shrink-0 shadow-sm">
+                  ) : (
                     <img
                       src={generateFallbackBrandImage(slot2Banner.companyName, slot2Banner.category)}
                       alt={slot2Banner.companyName}
                       className="w-full h-full object-cover"
                       referrerPolicy="no-referrer"
                     />
+                  )}
+                  <div className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/75 backdrop-blur-sm text-[8px] font-bold text-[#00E5FF] border border-[#00E5FF]/30 pointer-events-none flex items-center gap-1">
+                    <Sparkles className="w-2.5 h-2.5 text-[#00E5FF]" />
+                    <span>Destaque</span>
                   </div>
-                )}
-
-                {/* Company Name & Headline */}
-                <div className="space-y-0.5 text-left flex-1 min-w-0">
-                  <h3
-                    className={`font-['Outfit'] text-xs sm:text-sm font-bold leading-tight truncate ${
-                      isLight ? 'text-slate-900' : 'text-white'
-                    }`}
-                  >
-                    {slot2Banner.companyName}:{' '}
-                    <span className={isLight ? 'text-[#FF6B00] font-semibold' : 'text-[#FF6B00] font-medium'}>
-                      {slot2Banner.headline}
-                    </span>
-                  </h3>
-                  <p className={`text-[11px] line-clamp-1 ${isLight ? 'text-slate-600' : 'text-gray-300'}`}>
-                    {slot2Banner.subtext}
-                  </p>
                 </div>
 
-                {/* Contact Sponsor Button */}
-                <a
-                  href={buildWhatsAppUrl(
-                    slot2Banner.whatsapp,
-                    `Olá ${slot2Banner.companyName}, vi seu destaque no banner do TecConecta (TecSoluções)!`
-                  )}
-                  onClick={() => recordBannerClick(slot2Banner!.id)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1 transition shrink-0 shadow-sm ${
-                    isLight
-                      ? 'bg-white hover:bg-slate-50 border-slate-300 text-slate-800'
-                      : 'bg-white/10 hover:bg-white/20 border-white/20 text-white'
-                  }`}
-                  title="Falar com o patrocinador no WhatsApp"
-                >
-                  <MessageCircle className="w-3.5 h-3.5 text-[#25D366] shrink-0" />
-                  <span className="hidden sm:inline">WhatsApp</span>
-                </a>
+                {/* Company Name & Compact Text Column */}
+                <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5 space-y-1 text-left">
+                  <div>
+                    <h3
+                      className={`font-['Outfit'] text-xs sm:text-sm font-extrabold leading-tight truncate ${
+                        isLight ? 'text-slate-900' : 'text-white'
+                      }`}
+                    >
+                      {slot2Banner.companyName}
+                    </h3>
+                    <p className="text-[10px] sm:text-[11px] font-semibold text-[#00E5FF] leading-snug line-clamp-1 mt-0.5">
+                      {slot2Banner.headline}
+                    </p>
+                    <p className={`text-[9px] sm:text-[10px] leading-tight line-clamp-2 mt-0.5 opacity-90 ${isLight ? 'text-slate-600' : 'text-gray-300'}`}>
+                      {slot2Banner.subtext}
+                    </p>
+                  </div>
+
+                  {/* Contact Sponsor Button */}
+                  <a
+                    href={buildWhatsAppUrl(
+                      slot2Banner.whatsapp,
+                      `Olá ${slot2Banner.companyName}, vi seu destaque no banner do TecConecta (TecSoluções)!`
+                    )}
+                    onClick={() => recordBannerClick(slot2Banner!.id)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl bg-gradient-to-r from-[#25D366] to-[#128C7E] text-white text-[10px] sm:text-[11px] font-bold shadow-sm hover:brightness-110 active:scale-95 transition self-start shrink-0"
+                    title="Falar com o patrocinador no WhatsApp"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5 fill-white shrink-0" />
+                    <span>WhatsApp</span>
+                  </a>
+                </div>
               </div>
             </div>
           ) : (
             /* Empty Slot 2: Secondary Monetization Call */
-            <div className="relative flex items-center justify-between gap-3 h-full">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-[#00E5FF]/25 to-[#FF6B00]/20 border border-[#00E5FF]/40 flex items-center justify-center text-[#00E5FF] shadow-[0_0_12px_rgba(0,229,255,0.2)] shrink-0">
-                  <Sparkles className="w-4 h-4 animate-pulse" />
-                </div>
-                <div className="space-y-0.5 text-left min-w-0">
-                  <span className="text-[9px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/30 inline-block">
+            <div className="relative flex items-center gap-3 sm:gap-3.5 h-full">
+              <div className="relative w-36 sm:w-52 md:w-44 lg:w-56 h-24 sm:h-28 md:h-28 lg:h-32 rounded-xl border border-dashed border-[#00E5FF]/40 bg-gradient-to-br from-[#00E5FF]/15 via-black/30 to-[#FF6B00]/10 flex flex-col items-center justify-center text-center p-2 shrink-0 group">
+                <Sparkles className="w-5 h-5 text-[#00E5FF] mb-1 animate-pulse" />
+                <span className="text-[9.5px] sm:text-[10px] font-extrabold text-[#00E5FF] uppercase font-['Outfit']">Espaço Patrocinado</span>
+                <span className="text-[8px] sm:text-[8.5px] text-gray-400">Banner Retangular</span>
+              </div>
+
+              <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5 space-y-1 text-left">
+                <div>
+                  <span className="text-[8px] sm:text-[8.5px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/30 inline-block mb-0.5">
                     Espaço Destaque 2
                   </span>
                   <h3
@@ -361,23 +367,23 @@ export const MonetizationBanner: React.FC<MonetizationBannerProps> = ({
                   >
                     Destaque Sua Marca Aqui
                   </h3>
-                  <p className={`text-[10.5px] truncate ${isLight ? 'text-slate-600' : 'text-gray-300'}`}>
-                    Conecte sua empresa a centenas de clientes e autônomos locais.
+                  <p className={`text-[9px] sm:text-[10px] line-clamp-2 leading-tight mt-0.5 opacity-90 ${isLight ? 'text-slate-600' : 'text-gray-300'}`}>
+                    Conecte sua empresa a centenas de clientes e prestadores locais.
                   </p>
                 </div>
-              </div>
 
-              <a
-                href={admContactUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#00E5FF] to-cyan-600 hover:from-cyan-600 hover:to-[#00E5FF] text-[#0B132B] font-bold text-xs font-['Outfit'] flex items-center justify-center gap-1 shadow-[0_0_12px_rgba(0,229,255,0.3)] transition transform hover:-translate-y-0.5 shrink-0 whitespace-nowrap"
-                title="Contatar comercial para anunciar neste espaço"
-              >
-                <Sparkles className="w-3 h-3 shrink-0" />
-                <span>Anuncie</span>
-                <ArrowUpRight className="w-3 h-3 shrink-0" />
-              </a>
+                <a
+                  href={admContactUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl bg-gradient-to-r from-[#00E5FF] to-cyan-600 hover:from-cyan-600 hover:to-[#00E5FF] text-[#0B132B] font-bold text-[10px] sm:text-[11px] font-['Outfit'] shadow-[0_0_12px_rgba(0,229,255,0.3)] transition transform hover:-translate-y-0.5 shrink-0 self-start"
+                  title="Contatar comercial para anunciar neste espaço"
+                >
+                  <Sparkles className="w-3 h-3 shrink-0" />
+                  <span>Anuncie</span>
+                  <ArrowUpRight className="w-3 h-3 shrink-0" />
+                </a>
+              </div>
             </div>
           )}
         </div>

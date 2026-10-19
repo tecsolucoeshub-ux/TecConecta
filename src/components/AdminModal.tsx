@@ -938,7 +938,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                           }`}
                         >
                           {b.imageUrl && (
-                            <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 border border-white/10 bg-black/40">
+                            <div className="w-20 h-12 rounded-lg overflow-hidden shrink-0 border border-white/10 bg-black/40">
                               <img
                                 src={b.imageUrl}
                                 alt={b.companyName}
