@@ -77,8 +77,8 @@ export const TecBrandHero: React.FC<TecBrandHeroProps> = ({ onExplore }) => {
                 <MapPin className="w-4 h-4" />
               </div>
               <div>
-                <h4 className="text-xs sm:text-sm font-bold text-white font-['Outfit'] leading-tight">No Mapa</h4>
-                <p className="text-[10px] text-gray-400 hidden sm:block">Geolocalizado</p>
+                <h4 className="text-xs sm:text-sm font-bold text-white font-['Outfit'] leading-tight">Por GPS</h4>
+                <p className="text-[10px] text-gray-400 hidden sm:block">Mais próximos</p>
               </div>
             </div>
           </div>
@@ -91,7 +91,7 @@ export const TecBrandHero: React.FC<TecBrandHeroProps> = ({ onExplore }) => {
               className="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/20 text-[#F4F7F6] font-semibold text-xs sm:text-sm transition hover:border-[#00E5FF]/50 flex items-center justify-center gap-2 shadow-lg"
             >
               <Compass className="w-4 h-4 text-[#00E5FF]" />
-              <span>Explorar Profissionais & Mapa</span>
+              <span>Explorar Profissionais Locais</span>
             </button>
           </div>
         </div>

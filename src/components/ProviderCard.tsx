@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageCircle, MapPin, Star, ShieldCheck, ImageIcon } from 'lucide-react';
+import { MessageCircle, MapPin, Star, ShieldCheck, ImageIcon, Navigation } from 'lucide-react';
 import { Provider } from '../types';
 import { useTheme } from '../context/ThemeContext';
 import { getProviderPhoto, generateFallbackBrandImage, CATEGORY_DEFAULT_PHOTOS } from '../utils/imageCompressor';
@@ -81,6 +81,11 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
     ? calculateDistance(userCoords.lat, userCoords.lng, provider.lat, provider.lng)
     : null;
 
+  const googleMapsRouteUrl =
+    typeof provider.lat === 'number' && typeof provider.lng === 'number' && !isNaN(provider.lat) && !isNaN(provider.lng)
+      ? `https://www.google.com/maps/dir/?api=1&destination=${provider.lat},${provider.lng}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${provider.name} ${provider.city}`)}`;
+
   return (
     <div
       id={`provider-card-${provider.id}`}
@@ -141,8 +146,9 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
 
         {/* Proximity / Distance Tag on Bottom Right of Image */}
         {distanceKm !== null && (
-          <div className="absolute bottom-2 right-2.5 bg-[#0B132B]/90 text-[#00E5FF] backdrop-blur-md px-1.5 py-0.5 rounded text-[10px] font-bold border border-[#00E5FF]/30">
-            ~{distanceKm < 1 ? `${Math.round(distanceKm * 1000)}m` : `${distanceKm.toFixed(1)} km`}
+          <div className="absolute bottom-2 right-2.5 bg-[#0B132B]/90 text-[#00E5FF] backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-bold border border-[#00E5FF]/40 shadow-sm flex items-center gap-1">
+            <Navigation className="w-2.5 h-2.5 text-[#00E5FF]" />
+            <span>{distanceKm < 1 ? `${Math.round(distanceKm * 1000)}m` : `${distanceKm.toFixed(1)} km`}</span>
           </div>
         )}
 
@@ -171,15 +177,22 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
 
           {/* Location Info (Clean, without exposing CEP to public) */}
           <div
-            className={`mt-1.5 flex items-center gap-1 text-xs ${
+            className={`mt-1.5 flex items-center justify-between gap-1 text-xs ${
               isLight ? 'text-slate-600' : 'text-gray-300'
             }`}
           >
-            <MapPin className="w-3.5 h-3.5 text-[#FF6B00] shrink-0" />
-            <span className="truncate">
-              {provider.neighborhood ? `${provider.neighborhood}, ` : ''}
-              {provider.city}
-            </span>
+            <div className="flex items-center gap-1 min-w-0">
+              <MapPin className="w-3.5 h-3.5 text-[#FF6B00] shrink-0" />
+              <span className="truncate">
+                {provider.neighborhood ? `${provider.neighborhood}, ` : ''}
+                {provider.city}
+              </span>
+            </div>
+            {distanceKm !== null && (
+              <span className="text-[10px] font-bold text-[#00E5FF] bg-[#00E5FF]/10 px-2 py-0.5 rounded-full border border-[#00E5FF]/30 shrink-0">
+                {distanceKm < 1 ? `${Math.round(distanceKm * 1000)}m` : `${distanceKm.toFixed(1)} km`}
+              </span>
+            )}
           </div>
 
           {/* Optional Street Address if specified */}
@@ -242,21 +255,21 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
               </button>
             )}
 
-            {/* View on Map button */}
-            {onFocusOnMap && (
-              <button
-                id={`btn-map-focus-${provider.id}`}
-                onClick={() => onFocusOnMap(provider)}
-                className={`rounded-xl border p-2 transition shrink-0 ${
-                  isLight
-                    ? 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700 hover:text-[#0097A7]'
-                    : 'bg-white/5 border-white/10 text-gray-300 hover:text-[#00E5FF] hover:border-[#00E5FF]/40 hover:bg-white/10'
-                }`}
-                title="Ver localização no mapa"
-              >
-                <MapPin className="w-3.5 h-3.5" />
-              </button>
-            )}
+            {/* Direct Google Maps GPS Navigation Link */}
+            <a
+              id={`btn-map-route-${provider.id}`}
+              href={googleMapsRouteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`rounded-xl border p-2 transition shrink-0 flex items-center justify-center ${
+                isLight
+                  ? 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700 hover:text-[#0097A7]'
+                  : 'bg-white/5 border-white/10 text-gray-300 hover:text-[#00E5FF] hover:border-[#00E5FF]/40 hover:bg-white/10'
+              }`}
+              title="Abrir rota no Google Maps (GPS nativo)"
+            >
+              <Navigation className="w-3.5 h-3.5" />
+            </a>
           </div>
 
           {/* Advertisers notice in fine print */}

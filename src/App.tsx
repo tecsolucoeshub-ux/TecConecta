@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, MapPin, Navigation, Sparkles, Filter, CheckCircle2, MessageCircle, AlertCircle, RefreshCw, Compass, Building2, Trash2 } from 'lucide-react';
-import { Provider, ViewMode, SponsoredBanner, AdminSettings } from './types';
+import { Provider, SponsoredBanner, AdminSettings } from './types';
 import {
   fetchProviders,
   subscribeToProviders,
@@ -21,9 +21,7 @@ import { TecBrandHero } from './components/TecBrandHero';
 import { MonetizationBanner } from './components/MonetizationBanner';
 import { EditProfileModal } from './components/EditProfileModal';
 import { AdminModal } from './components/AdminModal';
-import { ViewSwitcher } from './components/ViewSwitcher';
 import { ProviderCard } from './components/ProviderCard';
-import { InteractiveMap } from './components/InteractiveMap';
 import { RegisterModal } from './components/RegisterModal';
 import { PrivacyPolicyModal } from './components/PrivacyPolicyModal';
 import { ReviewModal } from './components/ReviewModal';
@@ -61,7 +59,6 @@ export default function App() {
   const { isLight } = useTheme();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState('all');
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -433,8 +430,6 @@ export default function App() {
 
   const handleFocusOnMap = (p: Provider) => {
     setSelectedProvider(p);
-    setViewMode('map');
-    window.scrollTo({ top: 120, behavior: 'smooth' });
   };
 
   return (
@@ -505,13 +500,19 @@ export default function App() {
               </p>
             </div>
 
-            {/* View Switcher: Modo Lista vs Modo Mapa */}
-            <div className="shrink-0">
-              <ViewSwitcher
-                viewMode={viewMode}
-                onChangeView={setViewMode}
-                count={filteredProviders.length}
-              />
+            {/* GPS Proximity Status & Counter */}
+            <div className="shrink-0 flex items-center gap-2">
+              <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-[#080E21] border border-white/10 shadow-inner">
+                <span className="w-2 h-2 rounded-full bg-[#00E5FF] animate-pulse shrink-0" />
+                <span className="text-xs font-bold font-['Outfit'] text-white">
+                  {filteredProviders.length} profissionais
+                </span>
+                {userCoords && (
+                  <span className="text-[10px] font-extrabold text-[#0B132B] bg-[#00E5FF] px-2 py-0.5 rounded-full font-mono">
+                    GPS ATIVO
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -598,7 +599,7 @@ export default function App() {
         <div className="flex items-center justify-between gap-3 mb-3.5 sm:mb-5">
           <div className="flex items-center gap-2">
             <span className="font-['Outfit'] font-bold text-sm sm:text-base text-white">
-              {viewMode === 'list' ? 'Prestadores Encontrados' : 'Mapa de Localização'}
+              {userCoords ? 'Profissionais Ordenados por GPS' : 'Prestadores Encontrados'}
             </span>
             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-white/10 text-gray-300">
               {filteredProviders.length}
@@ -636,178 +637,64 @@ export default function App() {
           </div>
         </div>
 
-        {/* View Mode 1: List View */}
-        {viewMode === 'list' && (
-          <div>
-            {filteredProviders.length === 0 ? (
-              <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-8 sm:p-12 text-center max-w-md mx-auto space-y-4">
-                <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-gray-400">
-                  <Search className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white font-['Outfit']">
-                    Nenhum prestador encontrado
-                  </h3>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Tente buscar por outro termo, profissão ou selecionar outra cidade.
-                  </p>
-                </div>
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-2">
+        {/* List View with GPS Proximity */}
+        <div>
+          {filteredProviders.length === 0 ? (
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-8 sm:p-12 text-center max-w-md mx-auto space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-gray-400">
+                <Search className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white font-['Outfit']">
+                  Nenhum prestador encontrado
+                </h3>
+                <p className="text-xs text-gray-400 mt-1">
+                  Tente buscar por outro termo, profissão ou selecionar outra cidade.
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-2">
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSelectedCity('all');
+                    handleClearLocality();
+                  }}
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/10 text-white text-xs font-semibold hover:bg-white/15 transition"
+                >
+                  Restaurar Filtros e Ver Todos
+                </button>
+                {(!providers || providers.length === 0 || !providers.some(isDemoProvider)) && (
                   <button
-                    onClick={() => {
-                      setSearchQuery('');
-                      setSelectedCity('all');
-                      handleClearLocality();
-                    }}
-                    className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/10 text-white text-xs font-semibold hover:bg-white/15 transition"
+                    onClick={handleResetDemoData}
+                    className="w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-r from-[#00E5FF] to-[#FF6B00] text-[#0B132B] text-xs font-extrabold hover:brightness-110 transition flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(0,229,255,0.3)]"
                   >
-                    Restaurar Filtros e Ver Todos
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Restaurar Catálogo Exemplo</span>
                   </button>
-                  {(!providers || providers.length === 0 || !providers.some(isDemoProvider)) && (
-                    <button
-                      onClick={handleResetDemoData}
-                      className="w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-r from-[#00E5FF] to-[#FF6B00] text-[#0B132B] text-xs font-extrabold hover:brightness-110 transition flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(0,229,255,0.3)]"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Restaurar Catálogo Exemplo</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-5">
-                {filteredProviders.map((provider) => (
-                  <ProviderCard
-                    key={provider.id}
-                    provider={provider}
-                    userCoords={referenceCoords}
-                    onFocusOnMap={handleFocusOnMap}
-                    onOpenReview={handleOpenReview}
-                    onEditProfile={(p) => {
-                      setProviderToEdit(p);
-                      setIsEditProfileOpen(true);
-                    }}
-                    isAdmin={isAdminAuthenticated}
-                    isSelected={selectedProvider?.id === provider.id}
-                    admWhatsapp={adminSettings.admWhatsapp}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* View Mode 2: Interactive Google Map View */}
-        {viewMode === 'map' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-[620px]">
-            {/* Side Drawer: Quick List of Local Providers */}
-            <div className="hidden lg:flex lg:col-span-4 flex-col h-full rounded-2xl bg-[#080E21] border border-white/10 overflow-hidden">
-              <div className={`p-3.5 border-b flex items-center justify-between ${isLight ? 'border-slate-200 bg-slate-100' : 'border-white/10 bg-white/5'}`}>
-                <span className={`text-xs font-bold font-['Outfit'] ${isLight ? 'text-slate-900' : 'text-white'}`}>
-                  Profissionais no Radar ({filteredProviders.length})
-                </span>
-                <span className="text-[10px] text-gray-400">Clique para focar no mapa</span>
-              </div>
-              <div className="flex-1 overflow-y-auto p-3 space-y-2.5 custom-scrollbar">
-                {filteredProviders.map((p) => {
-                  const isSel = selectedProvider?.id === p.id;
-                  const distanceKm = referenceCoords
-                    ? calcDist(referenceCoords.lat, referenceCoords.lng, p.lat, p.lng)
-                    : null;
-                  return (
-                    <div
-                      key={p.id}
-                      onClick={() => setSelectedProvider(p)}
-                      className={`p-3 rounded-xl cursor-pointer transition border ${
-                        isSel
-                          ? isLight
-                            ? 'bg-cyan-50/80 border-[#00E5FF] shadow-sm'
-                            : 'bg-[#0E1B40] border-[#00E5FF] shadow-[0_0_15px_rgba(0,229,255,0.2)]'
-                          : isLight
-                          ? 'bg-white border-slate-200 hover:border-[#00E5FF]/40 hover:bg-slate-50'
-                          : 'bg-white/5 border-white/5 hover:border-white/20 hover:bg-white/10'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between text-[11px] mb-1">
-                        <span className="font-semibold text-[#00E5FF]">{p.category}</span>
-                        <div className="flex items-center gap-1.5">
-                          {distanceKm !== null && (
-                            <span className="text-[10px] font-bold text-[#00E5FF] bg-[#00E5FF]/15 px-1.5 py-0.5 rounded">
-                              ~{distanceKm < 1 ? `${Math.round(distanceKm * 1000)}m` : `${distanceKm.toFixed(1)} km`}
-                            </span>
-                          )}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenReview(p);
-                            }}
-                            className="text-amber-400 hover:text-amber-300 font-bold flex items-center gap-0.5 hover:underline cursor-pointer"
-                            title="Ver avaliações ou avaliar serviço"
-                          >
-                            ★ {p.rating ? p.rating.toFixed(1) : '5.0'}
-                          </button>
-                        </div>
-                      </div>
-                      <h4 className={`font-bold text-xs line-clamp-1 ${isLight ? 'text-slate-900' : 'text-white'}`}>{p.name}</h4>
-                      <p className={`text-[11px] mt-0.5 truncate ${isLight ? 'text-slate-500' : 'text-gray-400'}`}>
-                        {p.neighborhood ? `${p.neighborhood}, ` : ''}{p.city}
-                      </p>
-                      <div className={`mt-2 flex items-center justify-between pt-2 border-t ${isLight ? 'border-slate-100' : 'border-white/5'}`}>
-                        <a
-                          href={buildWhatsAppUrl(
-                            p.whatsapp,
-                            `Olá ${p.name}, vi seu anúncio no TecConecta (TecSoluções)!`
-                          )}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            recordProviderClick(p.id);
-                          }}
-                          className="text-[11px] font-bold text-[#25D366] flex items-center gap-1 hover:underline"
-                        >
-                          <MessageCircle className="w-3 h-3" />
-                          <span>WhatsApp</span>
-                        </a>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenReview(p);
-                            }}
-                            className="text-[10px] text-amber-400 hover:underline font-semibold"
-                          >
-                            Avaliar
-                          </button>
-                          <button
-                            onClick={() => setSelectedProvider(p)}
-                            className="text-[10px] text-[#00E5FF] hover:underline font-semibold"
-                          >
-                            No Mapa &rarr;
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                )}
               </div>
             </div>
-
-            {/* Interactive Map Component */}
-            <div className="col-span-1 lg:col-span-8 h-full">
-              <InteractiveMap
-                providers={filteredProviders}
-                selectedProvider={selectedProvider}
-                onSelectProvider={setSelectedProvider}
-                onOpenReview={handleOpenReview}
-                userCoords={referenceCoords}
-                centerCoords={mapCenterCoords}
-              />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-5">
+              {filteredProviders.map((provider) => (
+                <ProviderCard
+                  key={provider.id}
+                  provider={provider}
+                  userCoords={referenceCoords}
+                  onFocusOnMap={handleFocusOnMap}
+                  onOpenReview={handleOpenReview}
+                  onEditProfile={(p) => {
+                    setProviderToEdit(p);
+                    setIsEditProfileOpen(true);
+                  }}
+                  isAdmin={isAdminAuthenticated}
+                  isSelected={selectedProvider?.id === provider.id}
+                  admWhatsapp={adminSettings.admWhatsapp}
+                />
+              ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </main>
 
       {/* Locality & CEP Selector Modal */}
