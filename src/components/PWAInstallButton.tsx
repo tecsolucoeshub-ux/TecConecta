@@ -17,11 +17,12 @@ export const PWAInstallButton: React.FC = () => {
       <button
         id="btn-pwa-install"
         onClick={install}
-        className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#00E5FF]/20 to-[#FF6B00]/20 border border-[#00E5FF]/40 px-3.5 py-1.5 text-xs font-semibold text-[#00E5FF] hover:bg-[#00E5FF]/30 transition-all shadow-sm"
+        className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#00E5FF]/20 to-[#FF6B00]/20 border border-[#00E5FF]/40 p-2 sm:px-3.5 sm:py-1.5 text-xs font-semibold text-[#00E5FF] hover:bg-[#00E5FF]/30 transition-all shadow-sm shrink-0"
         title="Instalar TecConecta no seu aparelho"
+        aria-label="Instalar App"
       >
-        <Download className="w-3.5 h-3.5 text-[#00E5FF]" />
-        <span>Instalar App</span>
+        <Download className="w-3.5 h-3.5 text-[#00E5FF] shrink-0" />
+        <span className="hidden sm:inline">Instalar App</span>
       </button>
     );
   }
@@ -33,10 +34,12 @@ export const PWAInstallButton: React.FC = () => {
         <button
           id="btn-pwa-install-ios"
           onClick={() => setShowIOSGuide(true)}
-          className="flex items-center gap-2 rounded-xl bg-[#00E5FF]/15 border border-[#00E5FF]/30 px-3.5 py-1.5 text-xs font-semibold text-[#00E5FF] hover:bg-[#00E5FF]/25 transition-all"
+          className="flex items-center gap-1.5 rounded-xl bg-[#00E5FF]/15 border border-[#00E5FF]/30 p-2 sm:px-3 sm:py-1.5 text-xs font-semibold text-[#00E5FF] hover:bg-[#00E5FF]/25 transition-all shrink-0"
+          title="Instalar TecConecta no iPhone"
+          aria-label="Instalar no iPhone"
         >
-          <Smartphone className="w-3.5 h-3.5 text-[#00E5FF]" />
-          <span>Instalar no iPhone</span>
+          <Smartphone className="w-3.5 h-3.5 text-[#00E5FF] shrink-0" />
+          <span className="hidden sm:inline">Instalar no iPhone</span>
         </button>
 
         {showIOSGuide && (

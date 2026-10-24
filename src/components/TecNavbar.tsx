@@ -23,7 +23,7 @@ export const TecNavbar: React.FC<TecNavbarProps> = ({
           : 'bg-[#0B132B]/90 border-white/10'
       }`}
     >
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
+      <div className="max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-1.5 sm:gap-4 overflow-x-hidden">
         {/* Brand & Logo */}
         <div className="flex items-center gap-3 sm:gap-6 shrink-0">
           <TecLogo showTagline={false} />
@@ -41,12 +41,12 @@ export const TecNavbar: React.FC<TecNavbarProps> = ({
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+        <div className="flex items-center gap-1 sm:gap-2.5 shrink-0">
           {/* Theme Switcher Toggle (Claro / Escuro) */}
           <button
             id="btn-nav-toggle-theme"
             onClick={toggleTheme}
-            className={`flex items-center gap-1 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border transition text-xs font-semibold ${
+            className={`flex items-center justify-center p-2 sm:px-2.5 sm:py-1.5 rounded-xl border transition text-xs font-semibold shrink-0 ${
               isLight
                 ? 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800'
                 : 'bg-white/5 hover:bg-white/10 border-white/10 text-gray-200 hover:text-white'
@@ -74,12 +74,13 @@ export const TecNavbar: React.FC<TecNavbarProps> = ({
           <button
             id="btn-nav-privacy-policy"
             onClick={onOpenPrivacyPolicy}
-            className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold transition ${
+            className={`flex items-center justify-center p-2 sm:px-3 sm:py-1.5 rounded-xl border text-xs font-semibold transition shrink-0 ${
               isLight
                 ? 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700 hover:text-[#0097A7]'
                 : 'bg-white/5 hover:bg-white/10 border-white/10 text-gray-300 hover:text-[#00E5FF] hover:border-[#00E5FF]/40'
             }`}
             title="Ver Termos e Política de Privacidade"
+            aria-label="Termos de Uso e Privacidade"
           >
             <ShieldCheck className="w-3.5 h-3.5 text-[#00E5FF]" />
             <span className="hidden sm:inline">Termos</span>
@@ -89,12 +90,12 @@ export const TecNavbar: React.FC<TecNavbarProps> = ({
           <button
             id="btn-nav-register-business"
             onClick={onOpenRegister}
-            className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-[#00E5FF] to-[#FF6B00] text-[#0B132B] font-extrabold text-xs sm:text-sm tracking-wide shadow-[0_0_15px_rgba(0,229,255,0.3)] hover:brightness-110 active:scale-[0.98] transition shrink-0"
+            className="flex items-center gap-1.5 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-[#00E5FF] to-[#FF6B00] text-[#0B132B] font-extrabold text-xs sm:text-sm tracking-wide shadow-[0_0_15px_rgba(0,229,255,0.3)] hover:brightness-110 active:scale-[0.98] transition shrink-0"
+            title="Anunciar negócio no TecConecta"
           >
-            <PlusCircle className="w-4 h-4 text-[#0B132B] shrink-0" />
-            <span className="hidden xs:inline sm:hidden">Anunciar</span>
+            <PlusCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#0B132B] shrink-0" />
             <span className="hidden sm:inline">Cadastrar Negócio</span>
-            <span className="xs:hidden">Anunciar</span>
+            <span className="sm:hidden text-xs">Anunciar</span>
           </button>
         </div>
       </div>

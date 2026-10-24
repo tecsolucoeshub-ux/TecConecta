@@ -433,7 +433,7 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen flex flex-col transition-colors duration-200 ${isLight ? 'bg-[#F4F7F6] text-[#0B132B]' : 'bg-[#0B132B] text-[#F4F7F6]'}`}>
+    <div className={`min-h-screen flex flex-col transition-colors duration-200 overflow-x-hidden w-full max-w-full ${isLight ? 'bg-[#F4F7F6] text-[#0B132B]' : 'bg-[#0B132B] text-[#F4F7F6]'}`}>
       {/* Top Navbar with DaMaceno Soluções identity & PWA install */}
       <TecNavbar
         onOpenRegister={() => setIsRegisterOpen(true)}

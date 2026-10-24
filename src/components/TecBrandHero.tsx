@@ -7,7 +7,7 @@ interface TecBrandHeroProps {
 
 export const TecBrandHero: React.FC<TecBrandHeroProps> = ({ onExplore }) => {
   return (
-    <div className="relative overflow-hidden bg-gradient-to-b from-[#070D1E] via-[#0B132B] to-[#0E1B40] border-b border-white/10">
+    <div className="relative overflow-hidden w-full max-w-full bg-gradient-to-b from-[#070D1E] via-[#0B132B] to-[#0E1B40] border-b border-white/10">
       {/* Subtle Tech Circuit & Neon Background Elements */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-30">
         <div className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-[#00E5FF]/15 blur-3xl" />
@@ -24,7 +24,7 @@ export const TecBrandHero: React.FC<TecBrandHeroProps> = ({ onExplore }) => {
         </svg>
       </div>
 
-      <div className="relative max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-7 sm:py-10 lg:py-12">
+      <div className="relative max-w-5xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8 lg:py-10">
         <div className="flex flex-col items-center justify-center text-center space-y-4 sm:space-y-5">
           {/* Official Brand Badge - Only TecConecta with the pulsing dot */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#00E5FF]/10 border border-[#00E5FF]/30 text-xs font-semibold tracking-wide shadow-[0_0_20px_rgba(0,229,255,0.2)]">

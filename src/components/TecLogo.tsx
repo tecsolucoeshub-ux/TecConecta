@@ -10,9 +10,9 @@ export const TecLogo: React.FC<TecLogoProps> = ({ className = '', showTagline = 
   const { isLight } = useTheme();
 
   return (
-    <div className={`flex items-center gap-2.5 select-none ${className}`}>
+    <div className={`flex items-center gap-2 sm:gap-2.5 select-none shrink-0 ${className}`}>
       {/* High-tech DaMaceno Soluções Vector Symbol */}
-      <div className="relative w-10 h-10 shrink-0">
+      <div className="relative w-8 h-8 sm:w-10 sm:h-10 shrink-0">
         <svg
           viewBox="0 0 100 100"
           className="w-full h-full drop-shadow-[0_0_12px_rgba(0,229,255,0.4)]"
@@ -62,13 +62,13 @@ export const TecLogo: React.FC<TecLogoProps> = ({ className = '', showTagline = 
       <div className="flex flex-col">
         <div className="flex items-center gap-1.5 leading-none">
           <span
-            className={`font-['Outfit'] font-extrabold text-xl tracking-tight ${
+            className={`font-['Outfit'] font-extrabold text-lg sm:text-xl tracking-tight ${
               isLight ? 'text-[#0B132B]' : 'text-white'
             }`}
           >
             Tec<span className="text-[#00E5FF]">Conecta</span>
           </span>
-          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#FF6B00]/15 text-[#FF6B00] border border-[#FF6B00]/30">
+          <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider px-1 sm:px-1.5 py-0.5 rounded bg-[#FF6B00]/15 text-[#FF6B00] border border-[#FF6B00]/30 shrink-0">
             Direto
           </span>
         </div>

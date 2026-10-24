@@ -76,7 +76,7 @@ export const MonetizationBanner: React.FC<MonetizationBannerProps> = ({
   );
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-1.5 sm:py-2.5">
+    <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-1.5 sm:py-2.5 overflow-hidden">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-3.5">
         {/* ======================================================== */}
         {/* BANNER 1 (SLOT ESQUERDO)                                */}
