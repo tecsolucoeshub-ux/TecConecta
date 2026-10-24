@@ -16,13 +16,14 @@ import {
   Mail,
   Building2,
   AlertTriangle,
-  Lock
+  Lock,
+  Instagram
 } from 'lucide-react';
 import { Provider } from '../types';
 import { CATEGORIES } from '../data/categories';
 import { saveProvider } from '../services/firebase';
 import { fetchAddressByCep } from '../utils/cepGeocoding';
-import { ImageUploadField } from './ImageUploadField';
+import { MultiImageUploadField } from './MultiImageUploadField';
 import { normalizeWhatsAppNumber, validateWhatsAppNumber, buildWhatsAppUrl } from '../utils/whatsapp';
 
 interface RegisterModalProps {
@@ -66,12 +67,15 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const [whatsapp, setWhatsapp] = useState('');
   const [description, setDescription] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [instagram, setInstagram] = useState('');
   const [lat, setLat] = useState<number>(-17.7915);
   const [lng, setLng] = useState<number>(-50.9201);
   const [isLocating, setIsLocating] = useState(false);
   const [locationNotice, setLocationNotice] = useState<string | null>(null);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [declarationAccepted, setDeclarationAccepted] = useState(false);
+  const [admPolicyAccepted, setAdmPolicyAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -218,6 +222,11 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       return;
     }
 
+    if (!admPolicyAccepted) {
+      setErrorMessage('Você deve confirmar que realizou o cadastro completo e está ciente de que alterações posteriores serão feitas exclusivamente pelo ADM mediante ajuda de custo.');
+      return;
+    }
+
     const finalCategory = (isManualCategory || category === '__custom__' || category === 'Outra...') 
       ? (customCategory.trim() || 'Serviços Gerais') 
       : category;
@@ -266,7 +275,9 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
         lng: finalLng,
         whatsapp: whatsappValidation.normalized,
         description: description.trim() || undefined,
-        imageUrl: imageUrl.trim() || undefined,
+        imageUrl: photos[0] || (imageUrl.trim() || undefined),
+        photos: photos.length > 0 ? photos : (imageUrl.trim() ? [imageUrl.trim()] : undefined),
+        instagram: instagram.trim() || undefined,
         rating: 5.0,
         reviewsCount: 1,
         badge: businessProfile === 'mei' ? 'MEI Verificado' : 'Autônomo',
@@ -333,6 +344,25 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               <span>{errorMessage}</span>
             </div>
           )}
+
+          {/* Aviso Importante Exclusivo para Novos Anunciantes */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-[#FF6B00]/15 via-amber-500/10 to-[#00E5FF]/10 border border-[#FF6B00]/40 shadow-lg space-y-2">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-[#FF6B00] shrink-0" />
+              <h3 className="font-['Outfit'] text-sm sm:text-base font-extrabold text-white">
+                Atenção Novo Anunciante: Preencha seu cadastro de forma completa!
+              </h3>
+            </div>
+            <p className="text-xs text-gray-200 leading-relaxed">
+              Por favor, insira todos os seus dados e fotos com máxima atenção (fachada/produtos, descrição clara, WhatsApp correto e endereço).
+            </p>
+            <div className="p-2.5 rounded-xl bg-black/50 border border-[#FF6B00]/30 text-[11.5px] text-amber-200 flex items-start gap-2">
+              <ShieldCheck className="w-4 h-4 text-[#00E5FF] shrink-0 mt-0.5" />
+              <span>
+                <strong>Aviso de Segurança:</strong> Após a realização do cadastro, quaisquer alterações cadastrais ou de fotos serão feitas <strong>EXCLUSIVAMENTE pelo Administrador (ADM)</strong>, mediante ajuda de custo para manutenção da plataforma.
+              </span>
+            </div>
+          </div>
 
           {/* 1. Identificação do Responsável (Google ou E-mail) */}
           <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-2.5">
@@ -608,12 +638,34 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             />
           </div>
 
-          {/* 7. Upload de Foto com compressão automática */}
-          <ImageUploadField
-            label="Foto do Perfil ou Trabalho (Opcional)"
-            value={imageUrl}
-            onChange={setImageUrl}
-          />
+          {/* 7. Instagram (Opcional) */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-300 mb-1 flex items-center gap-1.5">
+              <Instagram className="w-3.5 h-3.5 text-[#E1306C]" />
+              <span>Instagram Oficial (Opcional)</span>
+            </label>
+            <input
+              type="text"
+              value={instagram}
+              onChange={(e) => setInstagram(e.target.value)}
+              placeholder="@seunegocio ou link do perfil"
+              className="w-full rounded-xl bg-white/5 border border-white/15 px-3.5 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#00E5FF] transition"
+            />
+          </div>
+
+          {/* 8. Upload de Fotos do Negócio (Até 5 fotos com compressão) */}
+          <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10">
+            <MultiImageUploadField
+              photos={photos}
+              onChange={(newPhotos) => {
+                setPhotos(newPhotos);
+                setImageUrl(newPhotos[0] || '');
+              }}
+              maxPhotos={5}
+              label="Fotos do seu Negócio / Trabalhos (Até 5 fotos)"
+              helperText="A primeira foto será a capa do anúncio. Você pode adicionar até 5 fotos para seus clientes verem na página completa do seu perfil!"
+            />
+          </div>
 
           {/* 8. Declaração MEI/Autônomo e Termos Legais */}
           <div className="space-y-2 pt-2 border-t border-white/10">
@@ -627,6 +679,19 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               />
               <span>
                 <strong>Declaração de Enquadramento:</strong> Declaro sob as penas da lei que sou profissional autônomo ou MEI e não possuo quadro societário ou porte de média/grande empresa.
+              </span>
+            </label>
+
+            <label className="flex items-start gap-2.5 cursor-pointer text-xs text-gray-300 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30">
+              <input
+                type="checkbox"
+                required
+                checked={admPolicyAccepted}
+                onChange={(e) => setAdmPolicyAccepted(e.target.checked)}
+                className="mt-0.5 rounded border-amber-400 bg-white/5 text-[#FF6B00] focus:ring-[#FF6B00]"
+              />
+              <span className="text-amber-100">
+                <strong className="text-[#FF6B00]">Ciência de Cadastro Completo & Alterações Exclusivas:</strong> Confirmo que preenchi todos os dados e fotos do meu perfil de forma completa, e estou ciente de que após a publicação qualquer alteração futura será realizada exclusivamente pelo ADM mediante ajuda de custo de manutenção da plataforma.
               </span>
             </label>
 

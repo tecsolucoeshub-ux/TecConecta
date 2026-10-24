@@ -41,6 +41,7 @@ import {
   signInAdminWithGoogle
 } from '../services/firebase';
 import { ImageUploadField } from './ImageUploadField';
+import { MultiImageUploadField } from './MultiImageUploadField';
 import { normalizeWhatsAppNumber, validateWhatsAppNumber } from '../utils/whatsapp';
 import { ProjectPresentationModal } from './ProjectPresentationModal';
 
@@ -124,6 +125,10 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [badgeText, setBadgeText] = useState('Empresa Patrocinada');
   const [category, setCategory] = useState('');
   const [bannerImageUrl, setBannerImageUrl] = useState('');
+  const [bannerPhotos, setBannerPhotos] = useState<string[]>([]);
+  const [bannerDescription, setBannerDescription] = useState('');
+  const [bannerAddress, setBannerAddress] = useState('');
+  const [bannerInstagram, setBannerInstagram] = useState('');
   const [bannerSaving, setBannerSaving] = useState(false);
 
   // Settings form state
@@ -292,10 +297,14 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     setCompanyName('');
     setHeadline('');
     setSubtext('');
+    setBannerDescription('');
+    setBannerAddress('');
+    setBannerInstagram('');
     setBannerWhatsapp('');
     setBadgeText('Empresa Patrocinada');
     setCategory('');
     setBannerImageUrl('');
+    setBannerPhotos([]);
   };
 
   const handleStartEditBanner = (b: SponsoredBanner) => {
@@ -303,10 +312,14 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     setCompanyName(b.companyName);
     setHeadline(b.headline);
     setSubtext(b.subtext || '');
+    setBannerDescription(b.description || b.subtext || '');
+    setBannerAddress(b.address || '');
+    setBannerInstagram(b.instagram || '');
     setBannerWhatsapp(b.whatsapp);
     setBadgeText(b.badgeText || 'Patrocinador Oficial');
     setCategory(b.category || '');
     setBannerImageUrl(b.imageUrl || '');
+    setBannerPhotos(b.photos && b.photos.length > 0 ? b.photos : b.imageUrl ? [b.imageUrl] : []);
     setIsCreatingBanner(true);
     setActiveTab('banners');
   };
@@ -327,15 +340,22 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     setBannerSaving(true);
     try {
       const existing = editingBannerId ? banners.find(b => b.id === editingBannerId) : null;
+      const effectiveCover = bannerPhotos.length > 0 ? bannerPhotos[0] : (bannerImageUrl.trim() || undefined);
+      const effectivePhotos = bannerPhotos.length > 0 ? bannerPhotos : (effectiveCover ? [effectiveCover] : undefined);
+
       const bannerToSave: SponsoredBanner = {
         id: editingBannerId || `banner-${Date.now()}`,
         companyName: companyName.trim(),
         headline: headline.trim(),
         subtext: subtext.trim() || 'Entre em contato pelo WhatsApp.',
+        description: bannerDescription.trim() || subtext.trim() || undefined,
+        address: bannerAddress.trim() || undefined,
+        instagram: bannerInstagram.trim() || undefined,
         whatsapp: val.normalized,
         badgeText: badgeText.trim() || 'Patrocinador Oficial',
         category: category.trim() || 'Comércio Local',
-        imageUrl: bannerImageUrl.trim() || undefined,
+        imageUrl: effectiveCover,
+        photos: effectivePhotos,
         active: existing ? existing.active : true,
         clicksCount: existing?.clicksCount || 0,
         createdAt: existing?.createdAt || new Date().toISOString()
@@ -361,9 +381,13 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     setBannerWhatsapp(p.whatsapp);
     setHeadline(`${p.name} - Atendimento Especializado`);
     setSubtext(p.description || `Serviço profissional de ${p.category} em ${p.city}. Contato direto via WhatsApp!`);
+    setBannerDescription(p.description || '');
+    setBannerAddress(p.address || `${p.neighborhood || ''}, ${p.city}`.trim());
+    setBannerInstagram(p.instagram || '');
     setBadgeText('Patrocinador Oficial');
     setCategory(p.category);
     setBannerImageUrl(p.imageUrl || '');
+    setBannerPhotos(p.photos && p.photos.length > 0 ? p.photos : (p.imageUrl ? [p.imageUrl] : []));
     setIsCreatingBanner(true);
     setActiveTab('banners');
   };
@@ -855,12 +879,47 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                         </div>
 
                         <div className="sm:col-span-2">
-                          <label className="block text-xs text-gray-300 mb-1">Subtítulo / Descrição</label>
+                          <label className="block text-xs text-gray-300 mb-1">Subtítulo Resumido (Exibido no card do banner)</label>
                           <input
                             type="text"
                             value={subtext}
                             onChange={(e) => setSubtext(e.target.value)}
                             placeholder="Ex: Medicamentos, perfumaria e conveniência com atendimento direto no WhatsApp."
+                            className="w-full rounded-lg bg-[#0B132B] border border-white/15 px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00E5FF]"
+                          />
+                        </div>
+
+                        <div className="sm:col-span-2">
+                          <label className="block text-xs text-gray-300 mb-1">
+                            Descrição Completa do Negócio & Serviços (Exibida na página completa ao clicar no banner)
+                          </label>
+                          <textarea
+                            rows={3}
+                            value={bannerDescription}
+                            onChange={(e) => setBannerDescription(e.target.value)}
+                            placeholder="Descreva detalhadamente o negócio, principais produtos, diferenciais, horário de atendimento, promoções e formas de pagamento..."
+                            className="w-full rounded-lg bg-[#0B132B] border border-white/15 px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00E5FF] leading-relaxed resize-y"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs text-gray-300 mb-1">Endereço / Localização (Opcional)</label>
+                          <input
+                            type="text"
+                            value={bannerAddress}
+                            onChange={(e) => setBannerAddress(e.target.value)}
+                            placeholder="Ex: Av. Presidente Vargas, 1200 - Centro, Rio Verde - GO"
+                            className="w-full rounded-lg bg-[#0B132B] border border-white/15 px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00E5FF]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs text-gray-300 mb-1">Instagram da Empresa (Opcional)</label>
+                          <input
+                            type="text"
+                            value={bannerInstagram}
+                            onChange={(e) => setBannerInstagram(e.target.value)}
+                            placeholder="Ex: @farmaciasaobento"
                             className="w-full rounded-lg bg-[#0B132B] border border-white/15 px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00E5FF]"
                           />
                         </div>
@@ -894,11 +953,19 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                         </div>
 
                         <div className="sm:col-span-2">
-                          <ImageUploadField
-                            value={bannerImageUrl}
-                            onChange={setBannerImageUrl}
-                            label="Foto / Logo / Fachada do Patrocinador (Banner)"
-                            helperText="Esta foto aparecerá em destaque no topo do TecConecta e chamará mais clientes."
+                          <MultiImageUploadField
+                            photos={bannerPhotos}
+                            onChange={(newPhotos) => {
+                              setBannerPhotos(newPhotos);
+                              if (newPhotos.length > 0) {
+                                setBannerImageUrl(newPhotos[0]);
+                              } else {
+                                setBannerImageUrl('');
+                              }
+                            }}
+                            maxPhotos={5}
+                            label="Fotos do Negócio / Vitrine (Até 5 fotos)"
+                            helperText="A foto marcada como 'Capa' é exibida no banner do topo. Ao clicar no banner, todas as 5 fotos aparecem na galeria completa."
                           />
                         </div>
                       </div>
@@ -961,6 +1028,9 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                               </span>
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-[#25D366] border border-emerald-500/30 flex items-center gap-1">
                                 💬 {b.clicksCount || 0} cliques WhatsApp
+                              </span>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-white/10 text-gray-300 border border-white/10 flex items-center gap-1">
+                                📷 {(b.photos && b.photos.length > 0 ? b.photos.length : b.imageUrl ? 1 : 0)} fotos
                               </span>
                             </div>
                             <p className="text-[11px] text-gray-300 truncate mt-0.5">{b.headline}</p>
@@ -1188,6 +1258,16 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-[#25D366] border border-emerald-500/30 flex items-center gap-1">
                                   💬 {p.clicksCount || 0} cliques
                                 </span>
+                                {p.photos && p.photos.length > 0 && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-500/15 text-[#00E5FF] border border-blue-500/30">
+                                    📷 {p.photos.length} {p.photos.length === 1 ? 'foto' : 'fotos'}
+                                  </span>
+                                )}
+                                {p.instagram && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-pink-500/15 text-[#E1306C] border border-pink-500/30">
+                                    📸 Instagram
+                                  </span>
+                                )}
                                 {isDemoProvider(p) && (
                                   <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">
                                     Fictício / Teste

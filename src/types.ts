@@ -17,6 +17,8 @@ export interface Provider {
   reviewsCount?: number;
   badge?: string;
   imageUrl?: string; // Photo of business / storefront / service / logo
+  photos?: string[]; // Up to 5 photos of the business/store/services
+  instagram?: string; // Optional instagram handle or profile link
   editPin?: string; // Optional security PIN defined by provider
   businessType?: ProviderBusinessType; // 'autonomo' | 'mei' (strictly excluding large enterprises)
   ownerEmail?: string;
@@ -41,12 +43,16 @@ export interface SponsoredBanner {
   companyName: string;
   headline: string;
   subtext: string;
+  description?: string; // Complete detailed description of services/products
   ctaText?: string;
   whatsapp: string; // digits only
   linkUrl?: string;
   badgeText?: string;
   category?: string;
   imageUrl?: string; // Banner / Logo / Showcase photo
+  photos?: string[]; // Up to 5 photos of the business/store/services
+  address?: string; // Physical location or neighborhood
+  instagram?: string; // Optional instagram handle or link
   active: boolean;
   createdAt: string;
   clicksCount?: number; // Total clicks tracked on banner

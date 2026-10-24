@@ -11,7 +11,7 @@ interface ProviderCardProps {
   userCoords?: { lat: number; lng: number } | null;
   onFocusOnMap?: (provider: Provider) => void;
   onOpenReview?: (provider: Provider) => void;
-  onEditProfile?: (provider: Provider) => void;
+  onViewDetails?: (provider: Provider) => void;
   isAdmin?: boolean;
   admWhatsapp?: string;
   isSelected?: boolean;
@@ -37,7 +37,7 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
   userCoords,
   onFocusOnMap,
   onOpenReview,
-  onEditProfile,
+  onViewDetails,
   isAdmin = false,
   admWhatsapp,
   isSelected = false,
@@ -100,7 +100,11 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
       }`}
     >
       {/* 1. Prominent Business Photo Showcase */}
-      <div className="relative w-full h-38 sm:h-44 overflow-hidden bg-slate-900 shrink-0">
+      <div
+        onClick={() => onViewDetails?.(provider)}
+        className="relative w-full h-38 sm:h-44 overflow-hidden bg-slate-900 shrink-0 cursor-pointer"
+        title="Clique para ver a página completa e fotos do profissional"
+      >
         <img
           src={imgSrc}
           alt={`Foto de ${provider.name}`}
@@ -152,25 +156,34 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
           </div>
         )}
 
-        {/* Custom photo indicator pill if advertiser provided their own image */}
-        {provider.imageUrl && (
-          <div className="absolute bottom-2 left-2.5 flex items-center gap-1 text-[9px] text-white/90 bg-black/60 backdrop-blur-md px-1.5 py-0.5 rounded">
-            <ImageIcon className="w-2.5 h-2.5 text-[#00E5FF]" />
-            <span>Foto Oficial</span>
-          </div>
-        )}
+        {/* Photo count indicator or custom photo pill */}
+        <div className="absolute bottom-2 left-2.5 flex items-center gap-1 pointer-events-none">
+          {provider.photos && provider.photos.length > 1 ? (
+            <div className="flex items-center gap-1 text-[9px] font-bold text-white bg-black/75 backdrop-blur-md px-2 py-0.5 rounded border border-white/20">
+              <ImageIcon className="w-2.5 h-2.5 text-[#00E5FF]" />
+              <span>{provider.photos.length} fotos</span>
+            </div>
+          ) : provider.imageUrl ? (
+            <div className="flex items-center gap-1 text-[9px] text-white/90 bg-black/60 backdrop-blur-md px-1.5 py-0.5 rounded">
+              <ImageIcon className="w-2.5 h-2.5 text-[#00E5FF]" />
+              <span>Foto Oficial</span>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {/* 2. Content & Information Section */}
       <div className="p-3.5 sm:p-4 flex-1 flex flex-col justify-between">
         <div>
-          {/* Business / Professional Name */}
+          {/* Business / Professional Name - clickable */}
           <h3
-            className={`font-['Outfit'] text-sm sm:text-base font-bold leading-snug line-clamp-1 transition-colors ${
+            onClick={() => onViewDetails?.(provider)}
+            className={`font-['Outfit'] text-sm sm:text-base font-bold leading-snug line-clamp-1 cursor-pointer transition-colors ${
               isLight
                 ? 'text-slate-900 group-hover:text-[#0097A7]'
                 : 'text-white group-hover:text-[#00E5FF]'
             }`}
+            title="Ver detalhes completos"
           >
             {provider.name}
           </h3>
@@ -230,12 +243,28 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
               onClick={() => recordProviderClick(provider.id)}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-[#25D366] to-[#128C7E] px-3 py-2 text-xs font-bold text-white shadow-[0_0_12px_rgba(37,211,102,0.25)] hover:brightness-110 active:scale-[0.98] transition"
+              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-[#25D366] to-[#128C7E] px-2.5 py-2 text-xs font-bold text-white shadow-[0_0_12px_rgba(37,211,102,0.25)] hover:brightness-110 active:scale-[0.98] transition"
               title="Abrir conversa direta no WhatsApp"
             >
               <MessageCircle className="w-3.5 h-3.5 fill-white shrink-0" />
-              <span>WhatsApp Direto</span>
+              <span>WhatsApp</span>
             </a>
+
+            {/* View Full Profile Button */}
+            {onViewDetails && (
+              <button
+                type="button"
+                onClick={() => onViewDetails(provider)}
+                className={`rounded-xl border px-2.5 py-2 transition shrink-0 flex items-center gap-1 text-xs font-semibold ${
+                  isLight
+                    ? 'bg-[#00B4D8]/10 hover:bg-[#00B4D8]/20 border-[#00B4D8]/30 text-[#0097A7]'
+                    : 'bg-[#00E5FF]/10 hover:bg-[#00E5FF]/20 border-[#00E5FF]/30 text-[#00E5FF] hover:border-[#00E5FF]/60'
+                }`}
+                title="Ver perfil completo com fotos, descrição e dados do anunciante"
+              >
+                <span>Ver Perfil</span>
+              </button>
+            )}
 
             {/* Direct Rate / Review Button */}
             {onOpenReview && (

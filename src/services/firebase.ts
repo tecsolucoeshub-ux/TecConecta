@@ -261,6 +261,17 @@ export function deduplicateProviders(list: Provider[]): Provider[] {
       if (!p.imageUrl || !p.imageUrl.trim()) {
         p.imageUrl = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=80';
       }
+      if (!p.photos || p.photos.length === 0) {
+        p.photos = [
+          'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=80',
+          'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&auto=format&fit=crop&q=80',
+          'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&auto=format&fit=crop&q=80',
+          'https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=800&auto=format&fit=crop&q=80'
+        ];
+      }
+      if (!p.instagram) {
+        p.instagram = 'tecsolucoes.hub';
+      }
     }
     if (p.whatsapp) {
       p.whatsapp = normalizeWhatsAppNumber(p.whatsapp);
@@ -766,11 +777,19 @@ export const SEED_BANNERS: SponsoredBanner[] = [
     companyName: 'TecSoluções Cloud & IA',
     headline: 'Transformação Digital & Automação Inteligente',
     subtext: 'Sistemas web sob medida, automação no WhatsApp e consultoria em IA para sua empresa.',
+    description: 'A TecSoluções desenvolve plataformas modernas de alta performance, automação para atendimento no WhatsApp, inteligência artificial aplicada e ecossistemas digitais sob medida para fortalecer empresas e negócios regionais.\n\n• Consultoria em Tecnologia & IA\n• Automação de Vendas e Suporte via WhatsApp\n• Plataformas Web e Aplicativos Móveis (PWA)\n• Integração em Nuvem com Alta Segurança',
     ctaText: 'Falar com Especialista',
     whatsapp: '64999317499',
     badgeText: 'Patrocinador Oficial',
     category: 'Tecnologia & Inovação',
+    address: 'Atendimento Regional e Nacional',
     imageUrl: 'https://images.unsplash.com/photo-1551434678-e076c223a692?w=800&auto=format&fit=crop&q=80',
+    photos: [
+      'https://images.unsplash.com/photo-1551434678-e076c223a692?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800&auto=format&fit=crop&q=80'
+    ],
     active: true,
     createdAt: '2026-01-01T00:00:00Z'
   },
@@ -779,11 +798,18 @@ export const SEED_BANNERS: SponsoredBanner[] = [
     companyName: 'Rede Farma Mais',
     headline: 'Entrega Rápida de Medicamentos no seu Bairro',
     subtext: 'Peça suas receitas e produtos de conveniência direto no WhatsApp sem filas.',
+    description: 'Atendimento farmacêutico humanizado com entrega rápida em toda a cidade. Medicamentos de referência, genéricos, dermocosméticos, suplementos e produtos infantis com os melhores preços e plantão pelo WhatsApp.\n\n• Entrega Expressa a Domicílio\n• Farmácia Popular e Descontos em Genéricos\n• Aferição de Pressão e Testes Rápidos\n• Atendimento Direto e Personalizado',
     ctaText: 'Pedir no WhatsApp',
     whatsapp: '11988887777',
     badgeText: 'Empresa Parceira',
     category: 'Saúde & Farmácia',
+    address: 'Av. Central, 850 - Centro Comercial',
     imageUrl: 'https://images.unsplash.com/photo-1586015555751-63bb77f4322a?w=800&auto=format&fit=crop&q=80',
+    photos: [
+      'https://images.unsplash.com/photo-1586015555751-63bb77f4322a?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1576602976047-174e57a47881?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1631549916768-4119b2e5f926?w=800&auto=format&fit=crop&q=80'
+    ],
     active: true,
     createdAt: '2026-01-15T00:00:00Z'
   }

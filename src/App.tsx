@@ -22,6 +22,7 @@ import { MonetizationBanner } from './components/MonetizationBanner';
 import { EditProfileModal } from './components/EditProfileModal';
 import { AdminModal } from './components/AdminModal';
 import { ProviderCard } from './components/ProviderCard';
+import { ProviderDetailModal } from './components/ProviderDetailModal';
 import { RegisterModal } from './components/RegisterModal';
 import { PrivacyPolicyModal } from './components/PrivacyPolicyModal';
 import { ReviewModal } from './components/ReviewModal';
@@ -98,6 +99,7 @@ export default function App() {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [providerToReview, setProviderToReview] = useState<Provider | null>(null);
+  const [selectedProviderForDetail, setSelectedProviderForDetail] = useState<Provider | null>(null);
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
     return typeof window !== 'undefined' && sessionStorage.getItem('tecconecta_admin_session_auth') === 'true';
   });
@@ -683,10 +685,7 @@ export default function App() {
                   userCoords={referenceCoords}
                   onFocusOnMap={handleFocusOnMap}
                   onOpenReview={handleOpenReview}
-                  onEditProfile={(p) => {
-                    setProviderToEdit(p);
-                    setIsEditProfileOpen(true);
-                  }}
+                  onViewDetails={(p) => setSelectedProviderForDetail(p)}
                   isAdmin={isAdminAuthenticated}
                   isSelected={selectedProvider?.id === provider.id}
                   admWhatsapp={adminSettings.admWhatsapp}
@@ -781,6 +780,16 @@ export default function App() {
           setProviderToEdit(p);
           setIsEditProfileOpen(true);
         }}
+      />
+
+      {/* Comprehensive Provider Profile & Photo Gallery Modal */}
+      <ProviderDetailModal
+        provider={selectedProviderForDetail}
+        isOpen={!!selectedProviderForDetail}
+        onClose={() => setSelectedProviderForDetail(null)}
+        onOpenReview={handleOpenReview}
+        userCoords={referenceCoords}
+        admWhatsapp={adminSettings.admWhatsapp}
       />
 
       {/* Community Ratings & Reviews Modal */}

@@ -13,10 +13,18 @@ export const SEED_PROVIDERS: Provider[] = [
     lng: -50.9328,
     whatsapp: '64999317499',
     createdAt: '2026-03-01T08:00:00Z',
-    description: 'Atendimento de Soluções com IA em Rio Verde - GO. Contato direto via WhatsApp!',
+    description: 'Desenvolvimento e integração de tecnologia de ponta, inteligência artificial aplicada a negócios, automações e soluções digitais modernas em Rio Verde e todo o Brasil. Atendimento direto e consultoria especializada.',
     rating: 5.0,
-    reviewsCount: 1,
-    badge: 'Novo',
-    imageUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=80'
+    reviewsCount: 12,
+    badge: 'Oficial TecSoluções',
+    businessType: 'mei',
+    imageUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=80',
+    photos: [
+      'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=800&auto=format&fit=crop&q=80'
+    ],
+    instagram: 'tecsolucoes.hub'
   }
 ];

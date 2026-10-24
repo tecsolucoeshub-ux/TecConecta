@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Check, Trash2, MapPin, Search, AlertTriangle, MessageCircle, Building2, Phone, Sparkles, RefreshCw, CheckCircle2, ExternalLink } from 'lucide-react';
+import { X, Check, Trash2, MapPin, Search, AlertTriangle, MessageCircle, Building2, Phone, Sparkles, RefreshCw, CheckCircle2, ExternalLink, Instagram } from 'lucide-react';
 import { Provider } from '../types';
 import { CATEGORIES } from '../data/categories';
 import { updateProvider, deleteProvider } from '../services/firebase';
 import { fetchAddressByCep } from '../utils/cepGeocoding';
-import { ImageUploadField } from './ImageUploadField';
+import { MultiImageUploadField } from './MultiImageUploadField';
 import { normalizeWhatsAppNumber, validateWhatsAppNumber, buildWhatsAppUrl, formatWhatsAppForDisplay } from '../utils/whatsapp';
 
 interface EditProfileModalProps {
@@ -41,6 +41,8 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   const [whatsapp, setWhatsapp] = useState('');
   const [description, setDescription] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [instagram, setInstagram] = useState('');
   const [lat, setLat] = useState<number>(0);
   const [lng, setLng] = useState<number>(0);
 
@@ -111,6 +113,8 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
     setWhatsapp(formatWhatsAppForDisplay(p.whatsapp));
     setDescription(p.description || '');
     setImageUrl(p.imageUrl || '');
+    setPhotos(p.photos && p.photos.length > 0 ? p.photos : (p.imageUrl ? [p.imageUrl] : []));
+    setInstagram(p.instagram || '');
     setLat(p.lat);
     setLng(p.lng);
     setConfirmDelete(false);
@@ -220,7 +224,9 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
         city: finalCity,
         whatsapp: whatsappValidation.normalized,
         description: description.trim() || undefined,
-        imageUrl: imageUrl.trim(),
+        imageUrl: photos[0] || imageUrl.trim(),
+        photos: photos.filter((p) => typeof p === 'string' && p.trim().length > 0),
+        instagram: instagram.trim() || undefined,
         lat: finalLat,
         lng: finalLng
       });
@@ -581,13 +587,32 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                 />
               </div>
 
-              {/* Foto do Negócio / Fachada / Logo */}
+              {/* Instagram (Opcional) */}
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-gray-300 mb-1 flex items-center gap-1.5">
+                  <Instagram className="w-3.5 h-3.5 text-[#E1306C]" />
+                  <span>Instagram Oficial (Opcional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={instagram}
+                  onChange={(e) => setInstagram(e.target.value)}
+                  placeholder="@seunegocio ou link do perfil"
+                  className="w-full rounded-xl bg-white/5 border border-white/15 px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-[#00E5FF] transition"
+                />
+              </div>
+
+              {/* Fotos do Negócio / Vitrine (Até 5 fotos com compressão) */}
               <div className="sm:col-span-2 p-3.5 rounded-xl bg-white/[0.03] border border-white/10">
-                <ImageUploadField
-                  value={imageUrl}
-                  onChange={setImageUrl}
-                  label="Foto do Negócio / Fachada / Logo"
-                  helperText="Dê visibilidade máxima ao seu negócio trocando ou adicionando uma foto atraente."
+                <MultiImageUploadField
+                  photos={photos}
+                  onChange={(newPhotos) => {
+                    setPhotos(newPhotos);
+                    setImageUrl(newPhotos[0] || '');
+                  }}
+                  maxPhotos={5}
+                  label="Fotos do Negócio / Trabalhos (Até 5 fotos)"
+                  helperText="A primeira foto é a foto principal de capa. Você pode adicionar até 5 fotos para que seus clientes visualizem na página completa do perfil!"
                 />
               </div>
             </div>
